@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0a0e1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Honkestra">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23ff7a00'/%3E%3Ctext y='75' x='50' font-size='62' text-anchor='middle'%3E%F0%9F%8E%BA%3C/text%3E%3C/svg%3E">
 <title>Honkestra — Play music with cars in traffic</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -134,10 +140,11 @@
     <p>When you're stopped in traffic and in the mood, jam with the cars around you. Every car has its own horn pitch — together you play a song.</p>
     <div class="hero">🚗🎵🚙</div>
     <div class="spacer"></div>
+    <input id="driver-name-input" placeholder="Your name (optional, e.g. Chaya)" maxlength="14" style="width:100%;font-size:16px;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px;text-align:center">
     <div class="stack">
-      <button class="btn" onclick="go('perms')">Get started</button>
+      <button class="btn" onclick="saveDriverName(); go('perms')">Get started</button>
       <button class="btn ghost" onclick="go('practice-pick')">🎮 Practice mode (solo)</button>
-      <p class="legal">Honk only when it's safe and legal. Honk Jam stops itself when you're moving. You're always in control.</p>
+      <p class="legal">Honk only when it's safe and legal. Honkestra stops itself when you're moving. You're always in control.</p>
     </div>
   </div>
 
@@ -200,6 +207,12 @@
       <button class="btn ghost small" onclick="go('car-make')">🚗 <span id="my-car-name">Car</span></button>
     </div>
 
+    <div class="room-tabs" style="background:rgba(255,184,0,0.08);border:1px solid rgba(255,184,0,0.2)">
+      <div class="room-tab" data-mode="game" onclick="setMode('game')">🎮 Game mode</div>
+      <div class="room-tab" data-mode="real" onclick="setMode('real')">🛣️ Real World</div>
+    </div>
+    <div id="mode-hint" style="font-size:12px;color:#8d96aa;text-align:center;margin-bottom:10px">—</div>
+
     <div class="room-tabs">
       <div class="room-tab selected" data-room="nearby" onclick="setRoom('nearby')">📍 Nearby</div>
       <div class="room-tab" data-room="code" onclick="setRoom('code')">🔢 Friend code</div>
@@ -241,10 +254,18 @@
     <button class="back" onclick="go('home')">← Back</button>
     <h2 style="margin-top:8px">Pick a song</h2>
     <p style="margin-bottom:12px"><span id="jam-count">3</span> cars are jamming.</p>
+    <input id="song-search" placeholder="🔎 Search songs (e.g. birthday, bond, twinkle)…" oninput="renderSongs()" style="width:100%;font-size:15px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px">
+    <div style="background:rgba(255,255,255,0.05);padding:10px 14px;border-radius:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px">
+        <span>🎚️ Tempo</span>
+        <span id="tempo-label" style="color:#ffb800">Normal (1.0×)</span>
+      </div>
+      <input type="range" id="tempo-slider" min="50" max="150" step="10" value="100" oninput="setTempo(this.value)" style="width:100%;accent-color:#ffb800">
+    </div>
     <div class="toggle-bar" style="padding:10px 14px;margin-bottom:8px">
       <div>
-        <div style="font-weight:700;font-size:14px">📹 Record jam as video</div>
-        <div style="font-size:11px;color:#8d96aa">For TikTok / Insta after</div>
+        <div style="font-weight:700;font-size:14px" id="record-toggle-label">📹 Record jam as video</div>
+        <div style="font-size:11px;color:#8d96aa" id="record-toggle-sub">For TikTok / Insta after</div>
       </div>
       <div class="switch" id="rec-switch" onclick="toggleRecordJam()"></div>
     </div>
@@ -329,6 +350,8 @@
         Your next honk in
         <span class="time" id="next-time">—</span>
       </div>
+
+      <video id="camera-preview" autoplay muted playsinline style="display:none;position:absolute;top:60px;right:12px;width:110px;height:160px;border-radius:14px;object-fit:cover;border:2px solid #ffb800;z-index:5;background:#000"></video>
 
       <button class="honk-btn" id="honk-btn" onclick="manualHonk()">HONK</button>
 
@@ -2153,6 +2176,213 @@ function useEventCode() {
     const inp = document.getElementById('code-in');
     if (inp) { inp.value = state.eventCode; inp.dispatchEvent(new Event('input')); }
   }, 100);
+}
+
+// =================================================================
+// MODE (Game / Real World), DRIVER NAME, TEMPO, SEARCH
+// =================================================================
+state.mode = localStorage.getItem('hj_mode') || 'game'; // 'game' | 'real'
+state.driverName = localStorage.getItem('hj_name') || '';
+state.tempoMult = parseFloat(localStorage.getItem('hj_tempo') || '1.0');
+state.songSearch = '';
+
+function setMode(m) {
+  state.mode = m;
+  localStorage.setItem('hj_mode', m);
+  document.querySelectorAll('.room-tab[data-mode]').forEach(t => t.classList.toggle('selected', t.dataset.mode === m));
+  const hint = document.getElementById('mode-hint');
+  if (hint) hint.textContent = m === 'real'
+    ? '🛣️ Phone stays SILENT — you honk with your real car horn. Camera records the action.'
+    : '🎮 Phone plays the horns. Perfect for practice and demos.';
+  const recLbl = document.getElementById('record-toggle-label');
+  const recSub = document.getElementById('record-toggle-sub');
+  if (recLbl && recSub) {
+    if (m === 'real') { recLbl.textContent = '📹 Record video (camera + mic)'; recSub.textContent = 'Captures real honking from outside'; }
+    else { recLbl.textContent = '📹 Record jam as video'; recSub.textContent = 'Screen + horn audio'; }
+  }
+}
+
+function saveDriverName() {
+  const inp = document.getElementById('driver-name-input');
+  if (inp && inp.value.trim()) {
+    state.driverName = inp.value.trim().slice(0, 14);
+    localStorage.setItem('hj_name', state.driverName);
+  }
+}
+function loadDriverName() {
+  const inp = document.getElementById('driver-name-input');
+  if (inp) inp.value = state.driverName;
+}
+
+function setTempo(v) {
+  state.tempoMult = (+v) / 100;
+  localStorage.setItem('hj_tempo', String(state.tempoMult));
+  const lbl = document.getElementById('tempo-label');
+  if (lbl) {
+    const tag = state.tempoMult < 0.85 ? 'Slow' : state.tempoMult > 1.15 ? 'Fast' : 'Normal';
+    lbl.textContent = `${tag} (${state.tempoMult.toFixed(2)}×)`;
+  }
+}
+
+// Override BEAT_MS in runJam to respect tempo
+const _origRunJam = runJam;
+runJam = function() {
+  // Patch BEAT_MS via state for scheduling; affects timeline + scheduling consistently
+  // We can't easily change const BEAT_MS inside runJam, so we monkey-patch by overriding the function
+  // Instead: scale the song's beats by 1/tempoMult by adjusting BEAT_MS effect
+  // Simplest path: temporarily multiply beats in the existing schedule by tempo factor by replacing the function body
+  _origRunJam();
+};
+
+// Cleaner approach: route everything through tempoMult by adjusting BEAT_MS at the call site.
+// Add helper used by runJam scheduling. (Existing runJam uses const BEAT_MS = 480 directly.)
+// We'll monkey-patch by re-defining runJam more directly below.
+</script>
+<script>
+// Override runJam so tempo control actually affects timing.
+runJam = function() {
+  const BEAT_MS = Math.round(480 / Math.max(0.1, state.tempoMult));
+  const jam = state.jam;
+  const nowAtCall = performance.now();
+  const PREROLL_MS = Math.max(0, jam.startAt - nowAtCall);
+  jam.prerollMs = PREROLL_MS;
+  const prerollEl = document.getElementById('preroll-banner');
+  if (prerollEl) prerollEl.style.display = PREROLL_MS > 300 ? 'block' : 'none';
+  if (state.recordNextJam) { state.jamVideoBlob = null; (state.mode === 'real' ? startCameraVideo() : startJamVideo()); }
+  scheduleHonkBuzzes(jam, PREROLL_MS, BEAT_MS);
+
+  const totalBeats = Math.max(...jam.notes.map(n => n.beat)) + 2;
+  const durationMs = totalBeats * BEAT_MS;
+  const allCars = jam.allCars;
+
+  const npRow = document.getElementById('np-row');
+  npRow.innerHTML = '';
+  allCars.forEach((c, i) => {
+    const b = document.createElement('div');
+    b.className = 'np-car' + (i === 0 ? ' you-car' : '');
+    b.dataset.car = i;
+    const label = i === 0 ? (state.driverName ? state.driverName.toUpperCase() : 'YOU') : (c.make ? c.make.toUpperCase() : c.model.toUpperCase());
+    b.innerHTML = `${c.icon}<div class="lbl">${label}</div>`;
+    npRow.appendChild(b);
+  });
+
+  const tl = document.getElementById('timeline');
+  tl.querySelectorAll('.timeline-marker').forEach(n => n.remove());
+  jam.notes.forEach((n, i) => {
+    const m = document.createElement('div');
+    const isYou = n.carIdx === 0;
+    const car = allCars[n.carIdx];
+    m.className = 'timeline-marker' + (isYou ? ' you' : '');
+    m.style.left = ((n.beat / totalBeats) * 100) + '%';
+    m.textContent = car.icon;
+    m.dataset.idx = i;
+    m.title = isYou ? 'You honk here' : (car.make + ' ' + car.model);
+    tl.appendChild(m);
+  });
+
+  const cursor = document.getElementById('cursor');
+  const honkBtn = document.getElementById('honk-btn');
+
+  jam.notes.forEach((n, i) => {
+    const at = n.beat * BEAT_MS + PREROLL_MS;
+    const car = allCars[n.carIdx];
+    setTimeout(() => {
+      if (state.jam !== jam) return;
+      const isYou = n.carIdx === 0;
+      // In Real World mode: don't play any audio at all (you honk your real car)
+      if (state.mode !== 'real' && (!isYou || jam.isPractice)) {
+        playHornAtPitch(car, n.semi, 0.4);
+        if (jam.battle) { const team = jam.battle.teams[n.carIdx]; jam.battle[team]++; }
+      }
+      const bubble = npRow.querySelector(`.np-car[data-car="${n.carIdx}"]`);
+      if (bubble) { bubble.classList.add('live'); setTimeout(() => bubble.classList.remove('live'), 350); }
+      const marker = tl.querySelector(`.timeline-marker[data-idx="${i}"]`);
+      if (marker) { marker.classList.add('active'); setTimeout(() => marker.classList.remove('active'), 250); setTimeout(() => marker?.classList.add('played'), 400); }
+    }, at);
+  });
+
+  let lastPrerollSec = -1;
+  const tick = setInterval(() => {
+    if (state.jam !== jam) { clearInterval(tick); return; }
+    const elapsed = performance.now() - jam.startAt;
+    cursor.style.left = Math.min(100, Math.max(0, (elapsed / durationMs) * 100)) + '%';
+    if (elapsed < 0) {
+      const secs = Math.ceil(-elapsed / 1000);
+      if (secs !== lastPrerollSec) {
+        const num = document.getElementById('preroll-num');
+        if (num) num.textContent = secs;
+        lastPrerollSec = secs;
+        playTick();
+      }
+      const firstYour = jam.yourNotes[0];
+      if (firstYour) document.getElementById('next-time').textContent = ((firstYour.beat * BEAT_MS - elapsed) / 1000).toFixed(1) + 's';
+    } else {
+      const pre = document.getElementById('preroll-banner');
+      if (pre && pre.style.display !== 'none') pre.style.display = 'none';
+      const nextYour = jam.yourNotes.find(n => n.beat * BEAT_MS > elapsed - 100);
+      if (nextYour) {
+        const ms = nextYour.beat * BEAT_MS - elapsed;
+        document.getElementById('next-time').textContent = ms > 0 ? (ms / 1000).toFixed(1) + 's' : 'NOW';
+        if (ms < 250 && ms > -250) honkBtn.classList.add('ready'); else honkBtn.classList.remove('ready');
+      } else { document.getElementById('next-time').textContent = '—'; honkBtn.classList.remove('ready'); }
+    }
+    if (elapsed >= durationMs) { clearInterval(tick); setTimeout(endJam, 600); }
+  }, 50);
+  jam._tick = tick;
+};
+
+// =================================================================
+// CAMERA RECORDING (Real World mode)
+// =================================================================
+async function startCameraVideo() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } },
+      audio: true
+    });
+    state.cameraStream = stream;
+    // Show a small live preview in the corner of the play screen
+    const prev = document.getElementById('camera-preview');
+    if (prev) { prev.srcObject = stream; prev.style.display = 'block'; }
+    state.jamChunks = [];
+    const mimeOptions = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+    let mime = ''; for (const m of mimeOptions) { if (MediaRecorder.isTypeSupported(m)) { mime = m; break; } }
+    state.jamRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    state.jamRecorder.ondataavailable = e => { if (e.data.size > 0) state.jamChunks.push(e.data); };
+    state.jamRecorder.onstop = () => {
+      const blob = new Blob(state.jamChunks, { type: state.jamRecorder.mimeType || 'video/webm' });
+      state.jamVideoBlob = blob;
+      stream.getTracks().forEach(t => t.stop());
+      const prev = document.getElementById('camera-preview');
+      if (prev) { prev.srcObject = null; prev.style.display = 'none'; }
+    };
+    state.jamRecorder.start();
+    return true;
+  } catch (e) { console.warn('camera fail', e); alert('Camera blocked — allow camera/mic to record.'); return false; }
+}
+
+// On load: apply saved mode, name, tempo, and patch search into renderSongs
+setMode(state.mode);
+setTempo((state.tempoMult * 100).toString());
+loadDriverName();
+
+const _origRenderSongs = renderSongs;
+renderSongs = function() {
+  _origRenderSongs();
+  const inp = document.getElementById('song-search');
+  if (!inp) return;
+  const q = inp.value.trim().toLowerCase();
+  if (!q) return;
+  // Hide rows that don't match
+  document.querySelectorAll('#song-list .song-row').forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(q) ? '' : 'none';
+  });
+};
+
+// Service worker for proper PWA install (cache the page so it works offline-ish)
+if ('serviceWorker' in navigator) {
+  try { navigator.serviceWorker.register('sw.js').catch(()=>{}); } catch(e){}
 }
 
 // On load: restore car + saved horn recording + custom songs
