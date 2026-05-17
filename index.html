@@ -307,7 +307,7 @@
   </div>
 
   <!-- Play -->
-  <div class="screen" id="screen-play">
+  <div class="screen" id="screen-play" onclick="onPlayTap(event)">
     <div class="top-bar">
       <div>
         <div class="brand" style="margin-bottom:2px" id="play-song-name">SONG</div>
@@ -1444,6 +1444,7 @@ function runJam() {
   const prerollEl = document.getElementById('preroll-banner');
   if (prerollEl) prerollEl.style.display = PREROLL_MS > 300 ? 'block' : 'none';
   if (state.recordNextJam) { state.jamVideoBlob = null; startJamVideo(); }
+  scheduleHonkBuzzes(jam, PREROLL_MS, BEAT_MS);
   const totalBeats = Math.max(...jam.notes.map(n => n.beat)) + 2;
   const durationMs = totalBeats * BEAT_MS;
 
@@ -1555,7 +1556,27 @@ function manualHonk() {
     hit._hit = true;
     state.jam.manualHits++;
     if (state.jam.battle) state.jam.battle[state.jam.battle.teams[0]]++;
+    if (navigator.vibrate) navigator.vibrate(40);
   }
+}
+
+// Tap anywhere on the play screen to honk (easier in-car than aiming at the button)
+function onPlayTap(ev) {
+  // Don't trigger if they're tapping a button (back, stop, honk btn itself)
+  if (ev.target.closest('button')) return;
+  manualHonk();
+}
+
+// Vibrate at the moment of each of YOUR notes so you feel when to honk
+function scheduleHonkBuzzes(jam, PREROLL_MS, BEAT_MS) {
+  if (!navigator.vibrate) return;
+  jam.yourNotes.forEach(n => {
+    const at = n.beat * BEAT_MS + PREROLL_MS;
+    setTimeout(() => {
+      if (state.jam !== jam) return;
+      navigator.vibrate([20, 30, 80]);
+    }, at - 50); // buzz just before so you can react
+  });
 }
 
 function stopJam() {
