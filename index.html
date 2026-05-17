@@ -1804,7 +1804,7 @@ function drawJamFrame() {
   // Footer
   ctx.fillStyle = '#6b7589';
   ctx.font = '28px sans-serif';
-  ctx.fillText('honkestra.app', W/2, H - 60);
+  ctx.fillText('cheskelsbreuer-bit.github.io/honkestra', W/2, H - 60);
 }
 
 async function shareJamVideo() {
@@ -1812,7 +1812,7 @@ async function shareJamVideo() {
   const ext = (state.jamVideoBlob.type.includes('mp4')) ? 'mp4' : 'webm';
   const file = new File([state.jamVideoBlob], `honkestra-jam.${ext}`, { type: state.jamVideoBlob.type });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: 'My Honkestra jam', text: 'Played with horns on honkestra.app 🎺' }); return; }
+    try { await navigator.share({ files: [file], title: 'My Honkestra jam', text: 'Played with horns on cheskelsbreuer-bit.github.io/honkestra 🎺' }); return; }
     catch(e) { /* fall through to download */ }
   }
   downloadJamVideo();
@@ -2084,7 +2084,7 @@ async function setupEventHostChannel(code, name) {
 }
 function shareEventCode() {
   const code = state.eventCode, name = state.eventName;
-  const text = `Join my Honkestra jam: "${name}". Open honkestra.app → Friend code → ${code}`;
+  const text = `Join my Honkestra jam: "${name}". Open cheskelsbreuer-bit.github.io/honkestra → Friend code → ${code}`;
   if (navigator.share) navigator.share({ title: 'Honkestra event', text });
   else { navigator.clipboard?.writeText(text); alert('Copied invite text to clipboard!'); }
 }
