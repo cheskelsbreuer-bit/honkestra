@@ -2,7 +2,7 @@
   "name": "Honkestra",
   "short_name": "Honkestra",
   "description": "Play music with cars in traffic",
-  "start_url": "./",
+  "start_url": "./app.html",
   "display": "standalone",
   "background_color": "#0a0e1a",
   "theme_color": "#ff7a00",

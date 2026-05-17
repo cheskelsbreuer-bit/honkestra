@@ -1,0 +1,2529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0e1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Honkestra">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23ff7a00'/%3E%3Ctext y='75' x='50' font-size='62' text-anchor='middle'%3E%F0%9F%8E%BA%3C/text%3E%3C/svg%3E">
+<title>Honkestra — Play music with cars in traffic</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a0e1a; color: #fff; user-select: none; }
+  body { display: flex; flex-direction: column; }
+  .app { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: 20px; overflow-y: auto; }
+  .screen.active { display: flex; }
+  h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.5px; }
+  h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  p { font-size: 15px; line-height: 1.5; color: #b8c0d0; }
+  .brand { font-size: 12px; color: #6b7589; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; font-weight: 700; }
+  .hero { font-size: 64px; line-height: 1; margin: 28px 0 20px; text-align: center; }
+  .btn { background: linear-gradient(135deg, #ffb800 0%, #ff7a00 100%); color: #1a1a1a; border: none; padding: 16px 24px; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; width: 100%; transition: transform .1s; box-shadow: 0 8px 24px rgba(255,122,0,.3); }
+  .btn:active { transform: scale(0.97); }
+  .btn.ghost { background: rgba(255,255,255,.08); color: #fff; box-shadow: none; }
+  .btn.danger { background: linear-gradient(135deg, #ff4d6d 0%, #c11e3c 100%); color: #fff; }
+  .btn.small { padding: 10px 16px; font-size: 14px; width: auto; }
+  .btn[disabled] { opacity: .4; pointer-events: none; }
+  .spacer { flex: 1; }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); padding: 14px; border-radius: 16px; cursor: pointer; transition: all .15s; }
+  .card:active { transform: scale(0.97); }
+  .card.selected { background: rgba(255,184,0,.15); border-color: #ffb800; }
+  .car-icon { font-size: 34px; margin-bottom: 6px; }
+  .car-name { font-weight: 700; font-size: 14px; line-height: 1.2; }
+  .car-horn { font-size: 11px; color: #8d96aa; margin-top: 4px; }
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 14px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #2dd55b; box-shadow: 0 0 12px #2dd55b; }
+  .status-dot.offline { background: #6b7589; box-shadow: none; }
+  .status-dot.warn { background: #ffb800; box-shadow: 0 0 12px #ffb800; }
+  .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #b8c0d0; }
+  #map { border-radius: 20px; flex: 1; min-height: 260px; margin-bottom: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); background: #1a2138; }
+  .leaflet-container { background: #1a2138 !important; }
+  .leaflet-tile { filter: brightness(.7) saturate(.6); }
+  .car-marker { background: none; border: none; }
+  .car-marker-inner { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; transform: translate(-50%,-50%); }
+  .car-marker-inner.you { background: linear-gradient(135deg, #ffb800, #ff7a00); box-shadow: 0 0 0 4px rgba(255,184,0,.25), 0 0 24px rgba(255,184,0,.5); }
+  .car-marker-inner.other { background: rgba(255,255,255,.95); color: #1a1a1a; box-shadow: 0 4px 10px rgba(0,0,0,.4); }
+  .car-marker-inner.invited { background: linear-gradient(135deg, #2dd55b, #1ba84a); color: #fff; }
+  .toggle-bar { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,.06); padding: 14px 18px; border-radius: 16px; margin-bottom: 12px; }
+  .switch { position: relative; width: 52px; height: 30px; background: #2a3247; border-radius: 30px; cursor: pointer; transition: background .2s; flex-shrink: 0; }
+  .switch.on { background: #2dd55b; }
+  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; background: #fff; border-radius: 50%; transition: transform .2s; }
+  .switch.on::after { transform: translateX(22px); }
+  .invite-banner { background: linear-gradient(135deg, #2dd55b 0%, #1ba84a 100%); color: #fff; padding: 14px 16px; border-radius: 16px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; animation: slideIn .3s; }
+  @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .invite-banner .btn { width: auto; padding: 8px 14px; font-size: 14px; }
+  .song-list { display: flex; flex-direction: column; gap: 8px; }
+  .song-row { background: rgba(255,255,255,.06); padding: 14px; border-radius: 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; gap: 10px; }
+  .song-row:active { background: rgba(255,255,255,.1); }
+  .song-name { font-weight: 600; font-size: 15px; }
+  .song-meta { font-size: 12px; color: #8d96aa; margin-top: 2px; }
+  .difficulty { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: .5px; margin-left: 6px; }
+  .diff-easy { background: rgba(45,213,91,.2); color: #2dd55b; }
+  .diff-med { background: rgba(255,184,0,.2); color: #ffb800; }
+  .diff-hard { background: rgba(255,77,109,.2); color: #ff4d6d; }
+  .countdown { font-size: 140px; font-weight: 900; text-align: center; line-height: 1; }
+  .play-area { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 20px; padding: 10px 0; }
+  .honk-btn { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, #ffb800 0%, #ff7a00 70%); border: none; color: #1a1a1a; font-size: 30px; font-weight: 900; cursor: pointer; box-shadow: 0 0 0 8px rgba(255,184,0,.2), 0 0 60px rgba(255,184,0,.4); transition: all .1s; letter-spacing: 2px; }
+  .honk-btn:active { transform: scale(0.95); box-shadow: 0 0 0 4px rgba(255,184,0,.3); }
+  .honk-btn.ready { animation: glow 0.4s ease-in-out infinite alternate; }
+  @keyframes glow { from { box-shadow: 0 0 0 8px rgba(255,184,0,.2), 0 0 60px rgba(255,184,0,.4); } to { box-shadow: 0 0 0 16px rgba(255,184,0,.4), 0 0 100px rgba(255,184,0,.8); } }
+  .timeline { width: 100%; height: 70px; background: rgba(255,255,255,.05); border-radius: 14px; position: relative; overflow: hidden; }
+  .timeline-track { position: absolute; top: 50%; transform: translateY(-50%); left: 0; right: 0; height: 4px; background: rgba(255,255,255,.1); }
+  .timeline-marker { position: absolute; top: 50%; transform: translate(-50%,-50%); width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(255,255,255,.12); transition: all .2s; border: 2px solid rgba(255,255,255,.2); }
+  .timeline-marker.you { background: linear-gradient(135deg, #ffb800, #ff7a00); border-color: #fff; }
+  .timeline-marker.played { opacity: .35; }
+  .timeline-marker.active { transform: translate(-50%,-50%) scale(1.6); box-shadow: 0 0 24px #ffb800; z-index: 2; }
+  .timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; transition: left .05s linear; }
+  .next-cue { text-align: center; font-size: 15px; color: #b8c0d0; }
+  .next-cue .time { font-size: 38px; font-weight: 800; color: #fff; display: block; line-height: 1.1; }
+  .now-playing { display: flex; align-items: flex-start; justify-content: center; gap: 10px; min-height: 90px; flex-wrap: wrap; }
+  .np-car { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.06); display: flex; align-items: center; justify-content: center; font-size: 26px; border: 2px solid rgba(255,255,255,.1); transition: all .15s; flex-shrink: 0; position: relative; }
+  .np-car.live { background: linear-gradient(135deg, #2dd55b, #1ba84a); border-color: #fff; transform: scale(1.15); box-shadow: 0 0 30px rgba(45,213,91,.6); }
+  .np-car.live.you-car { background: linear-gradient(135deg, #ffb800, #ff7a00); box-shadow: 0 0 30px rgba(255,184,0,.7); }
+  .np-car .lbl { position: absolute; top: 60px; font-size: 9px; color: #8d96aa; font-weight: 700; letter-spacing: .5px; white-space: nowrap; }
+  .np-car.live .lbl { color: #fff; }
+  .perm-row { background: rgba(255,255,255,.06); padding: 14px; border-radius: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; }
+  .perm-icon { font-size: 26px; }
+  .perm-text { flex: 1; }
+  .perm-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .perm-text span { font-size: 12px; color: #8d96aa; }
+  .perm-status { font-size: 12px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.08); }
+  .perm-status.granted { background: rgba(45,213,91,.2); color: #2dd55b; }
+  .perm-status.denied { background: rgba(255,77,109,.2); color: #ff4d6d; }
+  .legal { font-size: 11px; color: #5a627a; text-align: center; line-height: 1.5; margin-top: 14px; }
+  .back { background: none; border: none; color: #ffb800; font-size: 15px; padding: 0; cursor: pointer; font-weight: 600; align-self: flex-start; margin-bottom: 4px; }
+  .badge { display: inline-block; background: rgba(255,184,0,.15); color: #ffb800; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-left: 6px; vertical-align: middle; }
+  .make-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; -webkit-overflow-scrolling: touch; }
+  .make-tabs::-webkit-scrollbar { display: none; }
+  .make-tab { background: rgba(255,255,255,.06); padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+  .make-tab.selected { background: linear-gradient(135deg, #ffb800, #ff7a00); color: #1a1a1a; }
+  .room-tabs { display: flex; gap: 8px; background: rgba(255,255,255,.05); border-radius: 12px; padding: 4px; margin-bottom: 12px; }
+  .room-tab { flex: 1; text-align: center; padding: 10px; font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer; color: #8d96aa; }
+  .room-tab.selected { background: rgba(255,255,255,.1); color: #fff; }
+  .code-input { font-size: 32px; font-weight: 800; text-align: center; letter-spacing: 8px; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.1); border-radius: 14px; padding: 14px; color: #fff; width: 100%; }
+  .code-input:focus { outline: none; border-color: #ffb800; }
+  .stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
+  .stat { flex: 1; background: rgba(255,255,255,.06); padding: 12px; border-radius: 12px; text-align: center; }
+  .stat-num { font-size: 24px; font-weight: 800; color: #ffb800; }
+  .stat-lbl { font-size: 11px; color: #8d96aa; margin-top: 2px; letter-spacing: 1px; }
+  .speed-warn { background: linear-gradient(135deg, #ff4d6d, #c11e3c); padding: 12px 14px; border-radius: 12px; margin-bottom: 12px; font-size: 13px; font-weight: 600; text-align: center; }
+  .demo-controls { position: fixed; bottom: 6px; left: 6px; right: 6px; display: flex; gap: 6px; justify-content: center; z-index: 100; pointer-events: none; flex-wrap: wrap; }
+  .demo-controls .btn { pointer-events: auto; padding: 6px 10px; font-size: 11px; background: rgba(255,255,255,.1); color: #fff; box-shadow: none; width: auto; }
+  .horn-spec { font-family: ui-monospace, monospace; font-size: 11px; color: #6b7589; margin-top: 2px; }
+  details { background: rgba(255,255,255,.04); padding: 12px; border-radius: 10px; margin-bottom: 10px; }
+  details summary { font-weight: 600; cursor: pointer; font-size: 14px; }
+  details p { margin-top: 8px; font-size: 13px; }
+  .lobby-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .lobby-row:last-child { border-bottom: none; }
+  .lobby-row .car-emoji { font-size: 28px; }
+  .lobby-row .name { flex: 1; font-weight: 600; font-size: 14px; }
+  .ready-badge { font-size: 12px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.08); color: #8d96aa; font-weight: 700; }
+  .ready-badge.ready { background: rgba(45,213,91,.2); color: #2dd55b; }
+  .ready-badge.host { background: rgba(255,184,0,.2); color: #ffb800; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Splash / Welcome -->
+  <div class="screen active" id="screen-welcome">
+    <div class="brand">HONKESTRA</div>
+    <h1>Stuck in traffic?<br>Make music. 🎺</h1>
+    <p>When you're stopped in traffic and in the mood, jam with the cars around you. Every car has its own horn pitch — together you play a song.</p>
+    <div class="hero">🚗🎵🚙</div>
+    <div class="spacer"></div>
+    <input id="driver-name-input" placeholder="Your name (optional, e.g. Chaya)" maxlength="14" style="width:100%;font-size:16px;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px;text-align:center">
+    <div class="stack">
+      <button class="btn" onclick="saveDriverName(); go('perms')">Get started</button>
+      <button class="btn ghost" onclick="go('practice-pick')">🎮 Practice mode (solo)</button>
+      <p class="legal">Honk only when it's safe and legal. Honkestra stops itself when you're moving. You're always in control.</p>
+    </div>
+  </div>
+
+  <!-- Permissions -->
+  <div class="screen" id="screen-perms">
+    <button class="back" onclick="go('welcome')">← Back</button>
+    <h2 style="margin-top:8px">A few permissions</h2>
+    <p style="margin-bottom:16px">So we can find drivers near you and ping you when someone wants to jam.</p>
+
+    <div class="perm-row">
+      <div class="perm-icon">📍</div>
+      <div class="perm-text"><strong>Location</strong><span>To find cars near you (we never store it)</span></div>
+      <div class="perm-status" id="perm-loc">Not yet</div>
+    </div>
+    <button class="btn ghost" onclick="askLocation()">Allow location</button>
+
+    <div class="perm-row" style="margin-top:14px">
+      <div class="perm-icon">🔔</div>
+      <div class="perm-text"><strong>Notifications</strong><span>So drivers can ping you to jam</span></div>
+      <div class="perm-status" id="perm-notif">Not yet</div>
+    </div>
+    <button class="btn ghost" onclick="askNotif()">Allow notifications</button>
+
+    <details style="margin-top:20px">
+      <summary>How does this find other drivers?</summary>
+      <p>Your phone connects to a tiny cloud relay (Supabase Realtime — encrypted, no signup needed). It broadcasts your GPS spot and car type and listens for other phones in the same area. We never store your location anywhere. Or skip GPS and use a 4-digit friend code with people you know.</p>
+    </details>
+
+    <div class="spacer"></div>
+    <button class="btn" onclick="go('car-make')">Continue</button>
+  </div>
+
+  <!-- Car make picker -->
+  <div class="screen" id="screen-car-make">
+    <button class="back" onclick="go('perms')">← Back</button>
+    <h2 style="margin-top:8px">Pick your car maker</h2>
+    <p style="margin-bottom:14px">Step 1 of 2 — your car's horn pitch will be your "voice" in the song.</p>
+    <div class="make-tabs" id="make-tabs"></div>
+    <div class="grid" id="make-grid"></div>
+    <div class="spacer"></div>
+  </div>
+
+  <!-- Car model picker -->
+  <div class="screen" id="screen-car-model">
+    <button class="back" onclick="go('car-make')">← Back</button>
+    <h2 style="margin-top:8px" id="model-title">Pick your model</h2>
+    <p style="margin-bottom:14px">Step 2 of 2 — tap any model to hear its actual horn pitch.</p>
+    <div class="grid" id="model-grid"></div>
+    <div class="spacer"></div>
+    <button class="btn" id="model-continue" disabled onclick="onCarPicked()">Continue</button>
+  </div>
+
+  <!-- Home / map -->
+  <div class="screen" id="screen-home">
+    <div class="top-bar">
+      <div>
+        <div class="brand" style="margin-bottom:2px">HONKESTRA</div>
+        <div class="status-row"><span class="status-dot" id="status-dot"></span><span id="status-text">Looking for drivers…</span></div>
+      </div>
+      <button class="btn ghost small" onclick="go('car-make')">🚗 <span id="my-car-name">Car</span></button>
+    </div>
+
+    <div class="room-tabs" style="background:rgba(255,184,0,0.08);border:1px solid rgba(255,184,0,0.2)">
+      <div class="room-tab" data-mode="game" onclick="setMode('game')">🎮 Game mode</div>
+      <div class="room-tab" data-mode="real" onclick="setMode('real')">🛣️ Real World</div>
+    </div>
+    <div id="mode-hint" style="font-size:12px;color:#8d96aa;text-align:center;margin-bottom:10px">—</div>
+
+    <div class="room-tabs">
+      <div class="room-tab selected" data-room="nearby" onclick="setRoom('nearby')">📍 Nearby</div>
+      <div class="room-tab" data-room="code" onclick="setRoom('code')">🔢 Friend code</div>
+    </div>
+
+    <div id="speed-warn-slot"></div>
+    <div id="code-slot" style="display:none">
+      <input class="code-input" id="code-in" maxlength="4" placeholder="1234" inputmode="numeric" pattern="[0-9]*">
+      <p style="text-align:center;margin-top:8px;font-size:12px;color:#8d96aa">Type a 4-digit code. Same code = same room.</p>
+    </div>
+
+    <div class="toggle-bar">
+      <div>
+        <div style="font-weight:700;font-size:15px">I'm in the mood to jam</div>
+        <div style="font-size:12px;color:#8d96aa" id="mood-sub">Other drivers can invite you</div>
+      </div>
+      <div class="switch on" id="mood-switch" onclick="toggleMood()"></div>
+    </div>
+
+    <div id="invite-slot"></div>
+
+    <div style="position:relative;flex:1;min-height:260px;margin-bottom:12px">
+      <div id="map" style="margin:0;position:absolute;inset:0"></div>
+      <button onclick="recenterMap()" style="position:absolute;right:10px;bottom:10px;z-index:500;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)">📍</button>
+    </div>
+
+    <div style="text-align:center;font-size:12px;color:#8d96aa;margin:4px 0 8px" id="song-count-hint">— songs ready —</div>
+    <div class="stack">
+      <button class="btn" onclick="startJam()">🎺 Start a jam</button>
+      <button class="btn ghost" onclick="broadcastJamRequest()">📣 Honk for a jam (invite everyone nearby)</button>
+      <button class="btn ghost" onclick="go('event')">🎉 Create an event / convoy</button>
+      <button class="btn ghost" onclick="go('create-song')">✏️ Create your own song</button>
+      <button class="btn ghost" onclick="go('record')">🎤 <span id="rec-btn-label">Record your real horn</span></button>
+    </div>
+  </div>
+
+  <!-- Song picker -->
+  <div class="screen" id="screen-song">
+    <button class="back" onclick="go('home')">← Back</button>
+    <h2 style="margin-top:8px">Pick a song</h2>
+    <p style="margin-bottom:12px"><span id="jam-count">3</span> cars are jamming.</p>
+    <input id="song-search" placeholder="🔎 Search songs (e.g. birthday, bond, twinkle)…" oninput="renderSongs()" style="width:100%;font-size:15px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px">
+    <div class="make-tabs" id="song-cat-tabs" style="margin-bottom:10px"></div>
+    <div class="toggle-bar" style="padding:10px 14px;margin-bottom:8px">
+      <div>
+        <div style="font-weight:700;font-size:14px" id="record-toggle-label">📹 Record jam as video</div>
+        <div style="font-size:11px;color:#8d96aa" id="record-toggle-sub">For TikTok / Insta after</div>
+      </div>
+      <div class="switch" id="rec-switch" onclick="toggleRecordJam()"></div>
+    </div>
+    <div class="toggle-bar" style="padding:10px 14px;margin-bottom:12px">
+      <div>
+        <div style="font-weight:700;font-size:14px">🥊 Honk Battle (Red vs Blue)</div>
+        <div style="font-size:11px;color:#8d96aa">Cars split into 2 teams, highest hits wins</div>
+      </div>
+      <div class="switch" id="battle-switch" onclick="toggleBattle()"></div>
+    </div>
+    <div class="song-list" id="song-list"></div>
+    <div class="spacer" style="min-height:20px"></div>
+  </div>
+
+  <!-- Share / preview video -->
+  <div class="screen" id="screen-share">
+    <button class="back" onclick="go('home')">← Back to map</button>
+    <h2 style="margin-top:8px">🎉 Your jam is ready!</h2>
+    <p style="margin-bottom:10px">Share this clip on TikTok or Instagram.</p>
+    <video id="share-video" controls playsinline style="width:100%;border-radius:14px;background:#000;max-height:50vh"></video>
+    <div class="stack" style="margin-top:14px">
+      <button class="btn" onclick="shareJamVideo()">📲 Share / save video</button>
+      <button class="btn ghost" onclick="downloadJamVideo()">💾 Download</button>
+      <button class="btn ghost" onclick="go('end')">📊 See stats</button>
+    </div>
+    <p class="legal">Web video shares as .webm on Android & desktop, .mp4 on iOS. Both upload fine to TikTok and Instagram.</p>
+  </div>
+
+  <!-- Practice song picker -->
+  <div class="screen" id="screen-practice-pick">
+    <button class="back" onclick="go('welcome')">← Back</button>
+    <h2 style="margin-top:8px">Practice mode 🎮</h2>
+    <p style="margin-bottom:12px">Play alone. Your phone plays every car so you can learn the songs.</p>
+    <div class="song-list" id="practice-song-list"></div>
+  </div>
+
+  <!-- Lobby — wait for everyone to be ready -->
+  <div class="screen" id="screen-lobby">
+    <button class="back" onclick="leaveLobby()">← Leave lobby</button>
+    <h2 style="margin-top:8px" id="lobby-song">🎵 Song</h2>
+    <p style="margin-bottom:14px" id="lobby-status">Waiting for drivers…</p>
+
+    <div style="background:rgba(255,255,255,0.04);border-radius:14px;padding:8px;margin-bottom:14px" id="lobby-list"></div>
+
+    <div class="spacer"></div>
+    <div class="stack">
+      <button class="btn" id="lobby-ready" onclick="toggleReady()">Tap when ready</button>
+      <button class="btn" id="lobby-start" style="display:none" onclick="lobbyHostStart()">⏰ Start jam</button>
+    </div>
+    <p class="legal" id="lobby-hint">All phones will count down together once the host starts.</p>
+  </div>
+
+  <!-- Countdown -->
+  <div class="screen" id="screen-countdown">
+    <div class="play-area">
+      <p style="font-size:18px">Get ready to honk…</p>
+      <div class="countdown" id="cdNum">3</div>
+      <p style="color:#8d96aa">Watch your phone — it'll tell you when</p>
+    </div>
+  </div>
+
+  <!-- Play -->
+  <div class="screen" id="screen-play" onclick="onPlayTap(event)">
+    <div class="top-bar">
+      <div>
+        <div class="brand" style="margin-bottom:2px" id="play-song-name">SONG</div>
+        <div class="status-row"><span class="status-dot"></span><span id="play-drivers">3 cars</span></div>
+      </div>
+      <button class="btn ghost small danger" onclick="stopJam()">Stop</button>
+    </div>
+
+    <div class="play-area">
+      <div class="now-playing" id="np-row"></div>
+
+      <div id="preroll-banner" style="display:none;background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a;padding:16px 20px;border-radius:18px;text-align:center;box-shadow:0 0 50px rgba(255,184,0,0.5);width:100%">
+        <div style="font-size:13px;letter-spacing:3px;font-weight:700;opacity:0.8">🎺 SONG STARTS IN</div>
+        <div id="preroll-num" style="font-size:84px;font-weight:900;line-height:1;margin:4px 0">6</div>
+        <div style="font-size:12px;opacity:0.8">Watch the timeline — your honks are orange</div>
+      </div>
+
+      <div class="next-cue">
+        Your next honk in
+        <span class="time" id="next-time">—</span>
+      </div>
+
+      <video id="camera-preview" autoplay muted playsinline style="display:none;position:absolute;top:60px;right:12px;width:110px;height:160px;border-radius:14px;object-fit:cover;border:2px solid #ffb800;z-index:5;background:#000"></video>
+
+      <button class="honk-btn" id="honk-btn" onclick="manualHonk()">HONK</button>
+
+      <div class="timeline" id="timeline">
+        <div class="timeline-track"></div>
+        <div class="timeline-cursor" id="cursor" style="left:0"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom song creator -->
+  <div class="screen" id="screen-create-song">
+    <button class="back" onclick="go('home')">← Back</button>
+    <h2 style="margin-top:8px">✏️ Create your own song</h2>
+    <p style="margin-bottom:14px">Tap the big button to the beat you want. Each tap is one honk. Tap "Stop" when done. We'll spread the pitches across all jamming cars.</p>
+
+    <input id="custom-name" placeholder="Name your song (e.g. My Birthday Beat)" style="width:100%;font-size:16px;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:14px">
+
+    <div class="play-area" style="gap:14px">
+      <div id="cs-status" style="font-size:18px;text-align:center;color:#b8c0d0;min-height:30px">Press "Start" then tap to the beat.</div>
+      <button id="cs-tap" class="honk-btn" style="width:180px;height:180px;font-size:24px" disabled onclick="csTap()">TAP</button>
+      <div style="font-size:14px;color:#8d96aa">Honks: <span id="cs-count">0</span></div>
+      <div class="stack" style="width:100%">
+        <button class="btn" id="cs-start" onclick="csStart()">🔴 Start recording rhythm</button>
+        <button class="btn ghost" id="cs-stop" style="display:none" onclick="csStop()">⏹ Stop</button>
+        <button class="btn ghost" id="cs-preview" style="display:none" onclick="csPreview()">▶️ Preview</button>
+        <button class="btn" id="cs-save" style="display:none" onclick="csSave()">💾 Save song</button>
+      </div>
+    </div>
+
+    <details style="margin-top:14px">
+      <summary>Your custom songs</summary>
+      <div id="cs-list" style="margin-top:8px"></div>
+    </details>
+  </div>
+
+  <!-- Event / Convoy creator -->
+  <div class="screen" id="screen-event">
+    <button class="back" onclick="go('home')">← Back</button>
+    <h2 style="margin-top:8px">🎉 Event / Convoy Mode</h2>
+    <p style="margin-bottom:14px">For weddings, parades, tailgates. Create a private room with a 4-letter code your group enters to join.</p>
+
+    <input id="event-name" placeholder="Event name (e.g. Sara's Wedding)" style="width:100%;font-size:16px;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px">
+    <button class="btn" onclick="createEvent()">Create event code</button>
+
+    <div id="event-card" style="display:none;margin-top:16px;padding:20px;background:linear-gradient(135deg,rgba(255,184,0,0.15),rgba(255,122,0,0.1));border:1px solid #ffb800;border-radius:18px;text-align:center">
+      <div style="font-size:14px;color:#ffb800;letter-spacing:2px">YOUR EVENT CODE</div>
+      <div id="event-code-display" style="font-size:60px;font-weight:900;letter-spacing:12px;margin:8px 0">----</div>
+      <div id="event-name-display" style="font-size:18px;font-weight:700;color:#fff"></div>
+      <p style="margin-top:10px;font-size:13px;color:#b8c0d0">Tell everyone to open Honkestra → Friend code → type these 4 letters.</p>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn small" onclick="shareEventCode()">📲 Share</button>
+        <button class="btn small ghost" onclick="useEventCode()">Use this room</button>
+      </div>
+      <div style="margin-top:14px;font-size:13px;color:#8d96aa">Guests joined: <span id="event-joined">0</span></div>
+    </div>
+  </div>
+
+  <!-- Record real horn -->
+  <div class="screen" id="screen-record">
+    <button class="back" onclick="go('home')">← Back</button>
+    <h2 style="margin-top:8px">🎤 Record your real horn</h2>
+    <p style="margin-bottom:16px">Roll down your window, hold the phone outside, and honk for 1 second. We'll use your actual horn instead of synthesized sound.</p>
+
+    <div class="play-area" style="gap:14px">
+      <div style="font-size:80px" id="rec-emoji">🎤</div>
+      <div id="rec-status" style="font-size:18px;text-align:center;color:#b8c0d0;min-height:48px">Tap "Start" then honk once.</div>
+
+      <div class="stack" style="width:100%">
+        <button class="btn" id="rec-start" onclick="startRecording()">🔴 Start recording</button>
+        <button class="btn ghost" id="rec-preview" onclick="previewRecording()" style="display:none">▶️ Preview</button>
+        <button class="btn" id="rec-save" onclick="saveRecording()" style="display:none">💾 Use this horn</button>
+        <button class="btn ghost" id="rec-clear" onclick="clearRecording()" style="display:none">🗑️ Clear saved horn</button>
+      </div>
+
+      <p class="legal">Recording happens on-device only. Nothing is uploaded.</p>
+    </div>
+  </div>
+
+  <!-- End -->
+  <div class="screen" id="screen-end">
+    <div class="play-area">
+      <div style="font-size:72px">🎉</div>
+      <h1 style="text-align:center">Nice jam!</h1>
+      <p style="text-align:center">You hit <span id="end-hits">0</span> of <span id="end-total">0</span> cues.</p>
+      <div id="battle-result" style="text-align:center"></div>
+      <div class="stat-row" style="width:100%">
+        <div class="stat"><div class="stat-num" id="stat-jams">0</div><div class="stat-lbl">JAMS</div></div>
+        <div class="stat"><div class="stat-num" id="stat-acc">0%</div><div class="stat-lbl">ACCURACY</div></div>
+        <div class="stat"><div class="stat-num" id="stat-songs">0</div><div class="stat-lbl">SONGS</div></div>
+      </div>
+      <div class="stack" style="width:100%">
+        <button class="btn" onclick="go('home')">Back to map</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="demo-controls">
+  <button class="btn" onclick="spawnFakeDriver()">+ fake driver</button>
+  <button class="btn" onclick="fakeInvite()">📨 fake invite</button>
+  <button class="btn" onclick="clearFake()">clear fake</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+// =================================================================
+// CONFIG
+// =================================================================
+const SB_URL = 'https://pydvcnybqlnpwgehnmwx.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5ZHZjbnlicWxucHdnZWhubXd4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjc2NTgsImV4cCI6MjA5MzYwMzY1OH0.HnkFTBnq-KNLDmLtjQJ9xXVjqEUl8ZFqP7AdystrKEI';
+const sb = supabase.createClient(SB_URL, SB_KEY, { realtime: { params: { eventsPerSecond: 10 } } });
+
+// =================================================================
+// CAR DATABASE
+// Real-world horn fundamentals for many popular cars. Most factory horns
+// use a dual-tone (low + high) tuned to a major or minor third interval.
+// Numbers below are documented OEM horn frequencies (Hz) where known.
+// =================================================================
+// =================================================================
+// SVG car silhouettes — 14 distinct shapes, brand colors
+// =================================================================
+const BRAND_COLORS = {
+  Toyota:'#cc0000', Honda:'#dddddd', Ford:'#003478', Chevrolet:'#daa520',
+  BMW:'#0066b1', Mercedes:'#a8aaad', Audi:'#bb0a30', VW:'#3b6cb4',
+  Nissan:'#c3002f', Hyundai:'#002c5f', Kia:'#bb162b', Mazda:'#910a2d',
+  Lexus:'#cdcdc8', Porsche:'#dcdcdc', Ferrari:'#ff2800', Lambo:'#ffd700',
+  Bugatti:'#1a1a1a', McLaren:'#ff7a00', Rolls:'#e3d9b5', Bentley:'#0e4a2e',
+  Aston:'#0d4d44', Maserati:'#003e7e', Alfa:'#a8001b',
+  Tesla:'#ffffff', Rivian:'#0a4e3e', Lucid:'#bcc3cb', Polestar:'#cccccc',
+  Hummer:'#3d3a32', 'Land Rover':'#005a30', Jeep:'#637e5e', Ram:'#222222',
+  Mini:'#cc0000', Subaru:'#0033a0', Volvo:'#3a3a3a',
+  Mack:'#222222', Peterbilt:'#a51919', Bus:'#ffd700', Moto:'#222222',
+  Vintage:'#a78d6a'
+};
+function brandColor(c) { return BRAND_COLORS[c.make] || '#666'; }
+function shade(hex, pct) {
+  const m = (hex.replace('#','').match(/.{1,2}/g) || ['66','66','66']);
+  const rgb = m.map(x => parseInt(x, 16));
+  return '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v * (1 + pct/100)))).toString(16).padStart(2,'0')).join('');
+}
+const SHAPE_FROM_ICON = { '🚗':'sedan', '🚙':'suv', '🛻':'pickup', '🏎️':'sports', '🚘':'sedan', '🚐':'van', '🚚':'bigrig', '🚌':'bus', '🏍️':'moto' };
+const EV_MODELS = new Set(['Model 3','Model S','Model Y','Taycan','Air','2','Leaf','i3','i8','EV6','Ioniq 5','Bolt','e-tron','ID.4']);
+const OFFROAD_MODELS = new Set(['Wrangler','Defender','Bronco','4Runner','Range Rover','G-Wagon','Grand Cherokee','Gladiator']);
+function inferShape(car) {
+  if (car.shape) return car.shape;
+  if (car.make === 'Tesla' && car.model === 'Cybertruck') return 'cyber';
+  if (car.make === 'Hummer' && car.model === 'EV') return 'cyber';
+  if (car.make === 'Vintage') return 'vintage';
+  if (car.make === 'Mini') return 'mini';
+  if (EV_MODELS.has(car.model)) return 'evpod';
+  if (OFFROAD_MODELS.has(car.model)) return 'offroad';
+  return SHAPE_FROM_ICON[car.icon] || 'sedan';
+}
+const CAR_SHAPES = {
+  sedan: (c, d) => `<path d="M5 22 Q5 18 9 17 L18 12 Q22 11 26 11 L40 11 Q44 11 47 12 L55 17 Q59 18 59 22 L59 24 L5 24 Z" fill="${c}"/><path d="M21 17 L23 12.5 L40 12.5 L44 17 Z" fill="rgba(150,200,235,0.6)"/><circle cx="16" cy="24" r="4" fill="#1a1a1a"/><circle cx="48" cy="24" r="4" fill="#1a1a1a"/><circle cx="16" cy="24" r="1.5" fill="#888"/><circle cx="48" cy="24" r="1.5" fill="#888"/>`,
+  suv: (c, d) => `<path d="M5 22 L5 16 Q5 12 10 12 L18 9 Q22 8 26 8 L42 8 Q46 8 50 9 L58 12 Q60 13 60 16 L60 24 L5 24 Z" fill="${c}"/><path d="M19 12 L22 9 L42 9 L46 12 Z" fill="rgba(150,200,235,0.6)"/><circle cx="16" cy="24" r="4.5" fill="#1a1a1a"/><circle cx="48" cy="24" r="4.5" fill="#1a1a1a"/><circle cx="16" cy="24" r="2" fill="#888"/><circle cx="48" cy="24" r="2" fill="#888"/>`,
+  pickup: (c, d) => `<path d="M4 22 L4 16 Q4 13 8 13 L14 9 Q17 8 20 8 L30 8 Q33 8 33 11 L33 17 L60 17 L60 24 L4 24 Z" fill="${c}"/><path d="M33 19 L58 19 L58 23 L33 23 Z" fill="${d}"/><path d="M16 13 L18 9 L29 9 L31 13 Z" fill="rgba(150,200,235,0.6)"/><circle cx="14" cy="24" r="4.5" fill="#1a1a1a"/><circle cx="50" cy="24" r="4.5" fill="#1a1a1a"/><circle cx="14" cy="24" r="2" fill="#888"/><circle cx="50" cy="24" r="2" fill="#888"/>`,
+  sports: (c, d) => `<path d="M3 23 Q3 20 7 20 L11 18 Q16 14 26 13 L40 12 Q50 13 55 15 L60 18 Q62 21 60 23 L60 25 L3 25 Z" fill="${c}"/><path d="M19 18 L25 14 L41 13 L48 17 Z" fill="rgba(150,200,235,0.6)"/><circle cx="14" cy="25" r="3.5" fill="#1a1a1a"/><circle cx="50" cy="25" r="3.5" fill="#1a1a1a"/><circle cx="14" cy="25" r="1.5" fill="#888"/><circle cx="50" cy="25" r="1.5" fill="#888"/>`,
+  van: (c, d) => `<path d="M5 22 L5 12 Q5 8 9 7 L18 5 Q22 4 26 4 L52 4 Q56 4 58 7 L60 12 L60 24 L5 24 Z" fill="${c}"/><path d="M9 12 L11 8 L26 8 L26 12 Z" fill="rgba(150,200,235,0.6)"/><path d="M28 12 L28 8 L52 8 L54 12 Z" fill="rgba(150,200,235,0.6)"/><circle cx="14" cy="24" r="4.5" fill="#1a1a1a"/><circle cx="50" cy="24" r="4.5" fill="#1a1a1a"/><circle cx="14" cy="24" r="2" fill="#888"/><circle cx="50" cy="24" r="2" fill="#888"/>`,
+  bus: (c, d) => `<rect x="4" y="5" width="56" height="19" rx="3" fill="${c}"/><rect x="7" y="8" width="6" height="5" fill="rgba(150,200,235,0.6)"/><rect x="15" y="8" width="6" height="5" fill="rgba(150,200,235,0.6)"/><rect x="23" y="8" width="6" height="5" fill="rgba(150,200,235,0.6)"/><rect x="31" y="8" width="6" height="5" fill="rgba(150,200,235,0.6)"/><rect x="39" y="8" width="6" height="5" fill="rgba(150,200,235,0.6)"/><rect x="47" y="8" width="11" height="5" fill="rgba(150,200,235,0.6)"/><circle cx="14" cy="24" r="4" fill="#1a1a1a"/><circle cx="50" cy="24" r="4" fill="#1a1a1a"/>`,
+  bigrig: (c, d) => `<path d="M4 22 L4 10 Q4 7 8 7 L18 7 L18 22 Z" fill="${c}"/><rect x="20" y="5" width="40" height="17" fill="${d}"/><rect x="6" y="9" width="9" height="6" fill="rgba(150,200,235,0.6)"/><circle cx="10" cy="24" r="4" fill="#1a1a1a"/><circle cx="38" cy="24" r="4" fill="#1a1a1a"/><circle cx="56" cy="24" r="4" fill="#1a1a1a"/>`,
+  moto: (c, d) => `<path d="M16 23 L26 19 L36 14 L44 11 L48 21 L40 22 L24 22 Z" fill="${c}"/><line x1="18" y1="18" x2="22" y2="12" stroke="#333" stroke-width="2"/><circle cx="14" cy="24" r="6" fill="#1a1a1a"/><circle cx="14" cy="24" r="3" fill="#666"/><circle cx="46" cy="24" r="6" fill="#1a1a1a"/><circle cx="46" cy="24" r="3" fill="#666"/>`,
+  cyber: (c, d) => `<path d="M4 22 L4 18 L14 18 L24 7 L52 7 L60 22 L4 22 Z" fill="${c}"/><path d="M26 9 L36 9 L42 18 L24 18 Z" fill="rgba(150,200,235,0.5)"/><circle cx="14" cy="23" r="4" fill="#1a1a1a"/><circle cx="50" cy="23" r="4" fill="#1a1a1a"/>`,
+  offroad: (c, d) => `<rect x="6" y="8" width="52" height="14" rx="1" fill="${c}"/><rect x="9" y="11" width="46" height="6" fill="rgba(150,200,235,0.6)"/><circle cx="16" cy="24" r="6" fill="#1a1a1a"/><circle cx="48" cy="24" r="6" fill="#1a1a1a"/><circle cx="16" cy="24" r="3.5" fill="#666"/><circle cx="48" cy="24" r="3.5" fill="#666"/>`,
+  vintage: (c, d) => `<path d="M8 22 Q8 17 14 17 L18 11 L42 11 L46 17 Q52 17 52 22 L52 24 L8 24 Z" fill="${c}"/><path d="M19 17 L21 12 L40 12 L44 17 Z" fill="rgba(150,200,235,0.6)"/><circle cx="16" cy="22" r="5" fill="${c}"/><circle cx="48" cy="22" r="5" fill="${c}"/><circle cx="16" cy="24" r="4" fill="#1a1a1a"/><circle cx="48" cy="24" r="4" fill="#1a1a1a"/><circle cx="16" cy="24" r="2" fill="#aaa"/><circle cx="48" cy="24" r="2" fill="#aaa"/>`,
+  mini: (c, d) => `<path d="M10 22 Q10 16 16 15 L20 11 Q23 10 26 10 L40 10 Q43 10 44 14 L46 17 L54 17 Q56 17 56 22 L56 24 L10 24 Z" fill="${c}"/><path d="M22 14 L24 11 L40 11 L43 16 Z" fill="rgba(150,200,235,0.6)"/><circle cx="18" cy="24" r="4" fill="#1a1a1a"/><circle cx="48" cy="24" r="4" fill="#1a1a1a"/>`,
+  evpod: (c, d) => `<path d="M4 22 Q3 18 10 16 Q14 11 24 10 L40 10 Q50 11 54 16 Q61 18 60 22 L60 24 L4 24 Z" fill="${c}"/><path d="M14 16 Q17 11 27 11 L37 11 Q47 11 50 16 Z" fill="rgba(180,220,245,0.55)"/><circle cx="16" cy="24" r="4" fill="#1a1a1a"/><circle cx="48" cy="24" r="4" fill="#1a1a1a"/><circle cx="16" cy="24" r="1.5" fill="#888"/><circle cx="48" cy="24" r="1.5" fill="#888"/>`,
+};
+function carSVG(car, size = 36) {
+  const color = brandColor(car);
+  const dark = shade(color, -25);
+  const shapeFn = CAR_SHAPES[inferShape(car)] || CAR_SHAPES.sedan;
+  return `<svg viewBox="0 0 64 32" width="${size*2}" height="${size}" style="display:inline-block;vertical-align:middle;max-width:100%">${shapeFn(color, dark)}</svg>`;
+}
+
+const CARS_DB = [
+  // ---------- Toyota ----------
+  { make: 'Toyota',    model: 'Camry',     icon: '🚗', freq:[400,500], style:'classic', desc:'Bright dual-tone' },
+  { make: 'Toyota',    model: 'Corolla',   icon: '🚗', freq:[410,510], style:'classic', desc:'Standard sedan' },
+  { make: 'Toyota',    model: 'RAV4',      icon: '🚙', freq:[380,470], style:'classic', desc:'SUV body' },
+  { make: 'Toyota',    model: 'Tacoma',    icon: '🛻', freq:[320,420], style:'deep',    desc:'Truck horn' },
+  { make: 'Toyota',    model: 'Prius',     icon: '🚗', freq:[420,520], style:'sharp',   desc:'Compact, sharp' },
+  { make: 'Toyota',    model: 'Highlander',icon: '🚙', freq:[360,450], style:'classic', desc:'Family SUV' },
+  // ---------- Honda ----------
+  { make: 'Honda',     model: 'Civic',     icon: '🚗', freq:[380,470], style:'sharp',   desc:'Crisp two-tone' },
+  { make: 'Honda',     model: 'Accord',    icon: '🚗', freq:[370,460], style:'classic', desc:'Smooth sedan' },
+  { make: 'Honda',     model: 'CR-V',      icon: '🚙', freq:[350,440], style:'classic', desc:'Mid SUV' },
+  { make: 'Honda',     model: 'Pilot',     icon: '🚙', freq:[330,420], style:'classic', desc:'Large SUV' },
+  { make: 'Honda',     model: 'Odyssey',   icon: '🚐', freq:[300,400], style:'deep',    desc:'Minivan' },
+  // ---------- Ford ----------
+  { make: 'Ford',      model: 'F-150',     icon: '🛻', freq:[300,400], style:'deep',    desc:'Full-size pickup' },
+  { make: 'Ford',      model: 'Mustang',   icon: '🏎️', freq:[430,540], style:'sharp',   desc:'Muscle, sharp' },
+  { make: 'Ford',      model: 'Explorer',  icon: '🚙', freq:[340,430], style:'classic', desc:'SUV blast' },
+  { make: 'Ford',      model: 'Focus',     icon: '🚗', freq:[400,500], style:'classic', desc:'Compact' },
+  { make: 'Ford',      model: 'Bronco',    icon: '🛻', freq:[310,410], style:'deep',    desc:'Rugged dual-tone' },
+  // ---------- Chevrolet ----------
+  { make: 'Chevrolet', model: 'Silverado', icon: '🛻', freq:[290,390], style:'deep',    desc:'Truck horn' },
+  { make: 'Chevrolet', model: 'Malibu',    icon: '🚗', freq:[360,450], style:'classic', desc:'Mid sedan' },
+  { make: 'Chevrolet', model: 'Tahoe',     icon: '🚙', freq:[320,410], style:'deep',    desc:'Large SUV' },
+  { make: 'Chevrolet', model: 'Corvette',  icon: '🏎️', freq:[460,580], style:'sharp',   desc:'Sports, aggressive' },
+  { make: 'Chevrolet', model: 'Camaro',    icon: '🏎️', freq:[440,550], style:'sharp',   desc:'Muscle' },
+  // ---------- BMW ----------
+  { make: 'BMW',       model: '3 Series',  icon: '🚗', freq:[360,460], style:'smooth',  desc:'Refined dual-tone' },
+  { make: 'BMW',       model: '5 Series',  icon: '🚗', freq:[340,440], style:'smooth',  desc:'Executive' },
+  { make: 'BMW',       model: 'X5',        icon: '🚙', freq:[320,420], style:'smooth',  desc:'Luxury SUV' },
+  { make: 'BMW',       model: 'M3',        icon: '🏎️', freq:[400,510], style:'sharp',   desc:'Sport sedan, harder' },
+  { make: 'BMW',       model: 'i8',        icon: '🏎️', freq:[440,560], style:'sharp',   desc:'Hybrid sports' },
+  // ---------- Mercedes ----------
+  { make: 'Mercedes',  model: 'C-Class',   icon: '🚘', freq:[330,440], style:'smooth',  desc:'Smooth & full' },
+  { make: 'Mercedes',  model: 'E-Class',   icon: '🚘', freq:[320,430], style:'smooth',  desc:'Signature deep' },
+  { make: 'Mercedes',  model: 'S-Class',   icon: '🚘', freq:[300,410], style:'smooth',  desc:'Flagship rich tone' },
+  { make: 'Mercedes',  model: 'GLE',       icon: '🚙', freq:[310,420], style:'smooth',  desc:'Premium SUV' },
+  { make: 'Mercedes',  model: 'AMG GT',    icon: '🏎️', freq:[420,540], style:'sharp',   desc:'AMG aggressive' },
+  // ---------- Audi ----------
+  { make: 'Audi',      model: 'A4',        icon: '🚗', freq:[340,440], style:'smooth',  desc:'German precision' },
+  { make: 'Audi',      model: 'A6',        icon: '🚘', freq:[330,430], style:'smooth',  desc:'Executive' },
+  { make: 'Audi',      model: 'Q5',        icon: '🚙', freq:[320,420], style:'smooth',  desc:'Premium SUV' },
+  { make: 'Audi',      model: 'RS6',       icon: '🏎️', freq:[420,530], style:'sharp',   desc:'RS performance' },
+  // ---------- VW ----------
+  { make: 'VW',        model: 'Golf',      icon: '🚗', freq:[380,480], style:'classic', desc:'Compact German' },
+  { make: 'VW',        model: 'Jetta',     icon: '🚗', freq:[370,470], style:'classic', desc:'Standard sedan' },
+  { make: 'VW',        model: 'Tiguan',    icon: '🚙', freq:[350,450], style:'classic', desc:'Compact SUV' },
+  // ---------- Nissan / Hyundai / Kia / Mazda ----------
+  { make: 'Nissan',    model: 'Altima',    icon: '🚗', freq:[400,490], style:'classic', desc:'Mid sedan' },
+  { make: 'Nissan',    model: 'Rogue',     icon: '🚙', freq:[380,470], style:'classic', desc:'Compact SUV' },
+  { make: 'Nissan',    model: 'GT-R',      icon: '🏎️', freq:[460,580], style:'sharp',   desc:'Godzilla' },
+  { make: 'Hyundai',   model: 'Elantra',   icon: '🚗', freq:[400,500], style:'classic', desc:'Compact sedan' },
+  { make: 'Hyundai',   model: 'Tucson',    icon: '🚙', freq:[380,470], style:'classic', desc:'Crossover' },
+  { make: 'Kia',       model: 'Sportage',  icon: '🚙', freq:[380,470], style:'classic', desc:'SUV horn' },
+  { make: 'Kia',       model: 'Telluride', icon: '🚙', freq:[340,430], style:'classic', desc:'3-row SUV' },
+  { make: 'Mazda',     model: 'Mazda3',    icon: '🚗', freq:[400,500], style:'classic', desc:'Zoom-zoom' },
+  { make: 'Mazda',     model: 'CX-5',      icon: '🚙', freq:[380,470], style:'classic', desc:'Crossover' },
+  // ---------- Luxury / Exotic ----------
+  { make: 'Lexus',     model: 'ES',        icon: '🚘', freq:[340,440], style:'smooth',  desc:'Velvet horn' },
+  { make: 'Lexus',     model: 'RX',        icon: '🚙', freq:[320,420], style:'smooth',  desc:'Luxury SUV' },
+  { make: 'Porsche',   model: '911',       icon: '🏎️', freq:[440,560], style:'sharp',   desc:'Iconic, biting' },
+  { make: 'Porsche',   model: 'Cayenne',   icon: '🚙', freq:[360,460], style:'smooth',  desc:'Premium SUV' },
+  { make: 'Ferrari',   model: 'F8',        icon: '🏎️', freq:[480,640], style:'sharp',   desc:'Italian scream' },
+  { make: 'Lambo',     model: 'Huracán',   icon: '🏎️', freq:[500,660], style:'sharp',   desc:'Loudest two-tone' },
+  { make: 'Tesla',     model: 'Model 3',   icon: '🚗', freq:[440,440], style:'sharp',   desc:'Single-tone (famously thin)' },
+  { make: 'Tesla',     model: 'Model S',   icon: '🚘', freq:[400,500], style:'classic', desc:'Dual-tone' },
+  { make: 'Tesla',     model: 'Cybertruck',icon: '🛻', freq:[280,380], style:'deep',    desc:'Heavy thud' },
+  // ---------- More Toyota / Honda / Ford / Chevy ----------
+  { make: 'Toyota',    model: 'Sienna',    icon: '🚐', freq:[320,420], style:'classic', desc:'Minivan' },
+  { make: 'Toyota',    model: '4Runner',   icon: '🚙', freq:[330,420], style:'deep',    desc:'Off-road SUV' },
+  { make: 'Toyota',    model: 'Tundra',    icon: '🛻', freq:[290,390], style:'deep',    desc:'Full-size pickup' },
+  { make: 'Toyota',    model: 'Supra',     icon: '🏎️', freq:[440,560], style:'sharp',   desc:'Sport coupe' },
+  { make: 'Honda',     model: 'HR-V',      icon: '🚙', freq:[400,490], style:'classic', desc:'Subcompact' },
+  { make: 'Honda',     model: 'Ridgeline', icon: '🛻', freq:[330,430], style:'classic', desc:'Crossover truck' },
+  { make: 'Ford',      model: 'Edge',      icon: '🚙', freq:[340,440], style:'classic', desc:'Mid SUV' },
+  { make: 'Ford',      model: 'Escape',    icon: '🚙', freq:[370,470], style:'classic', desc:'Compact SUV' },
+  { make: 'Ford',      model: 'Maverick',  icon: '🛻', freq:[350,450], style:'classic', desc:'Compact truck' },
+  { make: 'Ford',      model: 'GT',        icon: '🏎️', freq:[460,580], style:'sharp',   desc:'Supercar' },
+  { make: 'Chevrolet', model: 'Suburban',  icon: '🚙', freq:[310,400], style:'deep',    desc:'Huge SUV' },
+  { make: 'Chevrolet', model: 'Equinox',   icon: '🚙', freq:[370,470], style:'classic', desc:'Compact SUV' },
+  { make: 'Chevrolet', model: 'Bolt',      icon: '🚗', freq:[430,500], style:'sharp',   desc:'EV compact' },
+  // ---------- More BMW / MB / Audi / VW ----------
+  { make: 'BMW',       model: '7 Series',  icon: '🚘', freq:[310,420], style:'smooth',  desc:'Flagship luxury' },
+  { make: 'BMW',       model: 'X3',        icon: '🚙', freq:[340,440], style:'smooth',  desc:'Compact SUV' },
+  { make: 'BMW',       model: 'i3',        icon: '🚗', freq:[430,530], style:'sharp',   desc:'EV city car' },
+  { make: 'Mercedes',  model: 'G-Wagon',   icon: '🛻', freq:[290,400], style:'deep',    desc:'Boxy off-roader' },
+  { make: 'Mercedes',  model: 'A-Class',   icon: '🚗', freq:[360,460], style:'smooth',  desc:'Entry luxury' },
+  { make: 'Mercedes',  model: 'Sprinter',  icon: '🚐', freq:[260,370], style:'air',     desc:'Big van/bus' },
+  { make: 'Audi',      model: 'R8',        icon: '🏎️', freq:[460,580], style:'sharp',   desc:'V10 supercar' },
+  { make: 'Audi',      model: 'e-tron',    icon: '🚙', freq:[330,430], style:'smooth',  desc:'EV SUV' },
+  { make: 'VW',        model: 'Beetle',    icon: '🚗', freq:[420,520], style:'classic', desc:'Iconic round' },
+  { make: 'VW',        model: 'ID.4',      icon: '🚙', freq:[360,460], style:'sharp',   desc:'EV crossover' },
+  // ---------- More Japanese & Korean ----------
+  { make: 'Nissan',    model: 'Leaf',      icon: '🚗', freq:[430,500], style:'sharp',   desc:'EV compact' },
+  { make: 'Nissan',    model: '370Z',      icon: '🏎️', freq:[440,560], style:'sharp',   desc:'Sport coupe' },
+  { make: 'Mazda',     model: 'MX-5',      icon: '🏎️', freq:[440,540], style:'sharp',   desc:'Miata roadster' },
+  { make: 'Kia',       model: 'EV6',       icon: '🚙', freq:[400,500], style:'sharp',   desc:'EV crossover' },
+  { make: 'Hyundai',   model: 'Ioniq 5',   icon: '🚙', freq:[400,500], style:'sharp',   desc:'EV retro' },
+  // ---------- More luxury / exotic ----------
+  { make: 'Lexus',     model: 'LC 500',    icon: '🏎️', freq:[420,540], style:'smooth',  desc:'Grand tourer' },
+  { make: 'Porsche',   model: 'Taycan',    icon: '🏎️', freq:[430,550], style:'sharp',   desc:'EV sports' },
+  { make: 'Ferrari',   model: 'SF90',      icon: '🏎️', freq:[490,650], style:'sharp',   desc:'Hybrid hypercar' },
+  { make: 'Lambo',     model: 'Urus',      icon: '🚙', freq:[420,540], style:'sharp',   desc:'Super SUV' },
+  { make: 'Bugatti',   model: 'Chiron',    icon: '🏎️', freq:[500,680], style:'sharp',   desc:'1500 hp' },
+  { make: 'McLaren',   model: '720S',      icon: '🏎️', freq:[480,620], style:'sharp',   desc:'British exotic' },
+  { make: 'Rolls',     model: 'Phantom',   icon: '🚘', freq:[280,400], style:'smooth',  desc:'Whisper luxury' },
+  { make: 'Bentley',   model: 'Continental',icon:'🚘', freq:[300,410], style:'smooth',  desc:'GT cruiser' },
+  { make: 'Aston',     model: 'DB11',      icon: '🏎️', freq:[420,540], style:'smooth',  desc:'British GT' },
+  { make: 'Maserati',  model: 'GT',        icon: '🏎️', freq:[440,560], style:'sharp',   desc:'Italian GT' },
+  { make: 'Alfa',      model: 'Giulia',    icon: '🚘', freq:[400,510], style:'smooth',  desc:'Italian sedan' },
+  // ---------- Tesla / EV trucks / new ----------
+  { make: 'Tesla',     model: 'Model Y',   icon: '🚙', freq:[400,500], style:'classic', desc:'EV SUV' },
+  { make: 'Rivian',    model: 'R1T',       icon: '🛻', freq:[310,410], style:'deep',    desc:'EV truck' },
+  { make: 'Lucid',     model: 'Air',       icon: '🚘', freq:[390,490], style:'smooth',  desc:'EV luxury' },
+  { make: 'Polestar',  model: '2',         icon: '🚗', freq:[380,480], style:'smooth',  desc:'Scandi EV' },
+  { make: 'Hummer',    model: 'EV',        icon: '🛻', freq:[260,360], style:'deep',    desc:'Massive EV' },
+  // ---------- Land Rover / Jeep / Ram / Mini extras ----------
+  { make: 'Land Rover',model: 'Defender',  icon: '🛻', freq:[300,410], style:'deep',    desc:'Off-road luxury' },
+  { make: 'Land Rover',model: 'Range Rover',icon:'🚙', freq:[310,410], style:'smooth',  desc:'Flagship SUV' },
+  { make: 'Jeep',      model: 'Grand Cherokee',icon:'🚙', freq:[340,440], style:'classic', desc:'Premium SUV' },
+  { make: 'Jeep',      model: 'Gladiator', icon: '🛻', freq:[380,470], style:'classic', desc:'Wrangler truck' },
+  { make: 'Ram',       model: '2500',      icon: '🛻', freq:[250,350], style:'deep',    desc:'Heavy-duty' },
+  { make: 'Mini',      model: 'Countryman',icon: '🚙', freq:[430,540], style:'sharp',   desc:'Mini SUV' },
+  { make: 'Subaru',    model: 'WRX',       icon: '🏎️', freq:[430,540], style:'sharp',   desc:'Rally sedan' },
+  { make: 'Subaru',    model: 'Forester',  icon: '🚙', freq:[400,490], style:'classic', desc:'Compact SUV' },
+  // ---------- Vintage / Iconic ----------
+  { make: 'Vintage',   model: 'Model T (1920s)', icon: '🚗', freq:[180,180], style:'air',     desc:'Ah-oo-gah! single' },
+  { make: 'Vintage',   model: 'VW Bus (60s)',    icon: '🚐', freq:[340,440], style:'classic', desc:'Hippie van' },
+  { make: 'Vintage',   model: 'Cadillac Eldorado',icon: '🚘', freq:[280,380], style:'smooth',  desc:'Land yacht' },
+  { make: 'Vintage',   model: 'Chevy Bel Air',   icon: '🚗', freq:[320,420], style:'classic', desc:"50s cruiser" },
+  // ---------- Trucks / Buses / Other ----------
+  { make: 'Ram',       model: '1500',      icon: '🛻', freq:[280,380], style:'deep',    desc:'Heavy duty' },
+  { make: 'Jeep',      model: 'Wrangler',  icon: '🛻', freq:[400,500], style:'classic', desc:'Adventure horn' },
+  { make: 'Mini',      model: 'Cooper',    icon: '🚗', freq:[460,560], style:'sharp',   desc:'British high tone' },
+  { make: 'Subaru',    model: 'Outback',   icon: '🚙', freq:[400,500], style:'classic', desc:'Adventure wagon' },
+  { make: 'Volvo',     model: 'XC90',      icon: '🚙', freq:[360,450], style:'smooth',  desc:'Scandi smooth' },
+  { make: 'Volvo',     model: 'VNL Truck', icon: '🚚', freq:[150,230], style:'air',     desc:'Big rig' },
+  { make: 'Peterbilt', model: '379',       icon: '🚚', freq:[130,220], style:'air',     desc:'Train-horn rig' },
+  { make: 'Mack',      model: 'Truck',     icon: '🚚', freq:[150,250], style:'air',     desc:'Air horn — DEEP' },
+  { make: 'Bus',       model: 'City Bus',  icon: '🚌', freq:[180,240], style:'air',     desc:'Diesel bus' },
+  { make: 'Bus',       model: 'School Bus',icon: '🚌', freq:[200,280], style:'air',     desc:'Yellow giant' },
+  { make: 'Moto',      model: 'Sportbike', icon: '🏍️', freq:[500,700], style:'sharp',   desc:'Bike horn' },
+  { make: 'Moto',      model: 'Harley',    icon: '🏍️', freq:[380,520], style:'sharp',   desc:'Cruiser bike' },
+];
+
+const MAKES = [...new Set(CARS_DB.map(c => c.make))];
+
+// =================================================================
+// SONG DATABASE
+// Notes are [beat, semitonesFromC4]. Songs vary from 8 honks to ~80.
+// =================================================================
+function semi(s) { return s; } // helper
+const SONGS = [
+  // Quick & easy
+  { id:'rockyou',  name:'We Will Rock You', emoji:'👊', diff:'easy',
+    notes:[[0,0],[0.5,0],[1.5,0],[3,0],[3.5,0],[4.5,0],[6,0],[6.5,0]] },
+  { id:'fifth',    name:"Beethoven's 5th (intro)", emoji:'🎼', diff:'easy',
+    notes:[[0,7],[0.5,7],[1,7],[2,3],[4,5],[4.5,5],[5,5],[6,2]] },
+  // Easy classics
+  { id:'twinkle',  name:'Twinkle Twinkle', emoji:'⭐', diff:'easy',
+    notes:[[0,0],[1,0],[2,7],[3,7],[4,9],[5,9],[6,7],[8,5],[9,5],[10,4],[11,4],[12,2],[13,2],[14,0]] },
+  { id:'mary',     name:'Mary Had a Little Lamb', emoji:'🐑', diff:'easy',
+    notes:[[0,4],[1,2],[2,0],[3,2],[4,4],[5,4],[6,4],[8,2],[9,2],[10,2],[12,4],[13,7],[14,7]] },
+  { id:'birthday', name:'Happy Birthday', emoji:'🎂', diff:'easy',
+    notes:[[0,0],[0.75,0],[1,2],[2,0],[3,5],[4,4],[5.5,0],[6.25,0],[6.5,2],[7.5,0],[8.5,7],[9.5,5]] },
+  // Medium
+  { id:'jingle',   name:'Jingle Bells', emoji:'🔔', diff:'med',
+    notes:[[0,4],[1,4],[2,4],[4,4],[5,4],[6,4],[8,4],[9,7],[10,0],[11,2],[12.5,4],
+           [14,5],[15,5],[15.5,5],[16,5],[17,4],[18,4],[18.5,4],[19,4],[20,2],[21,2],[22,4],[23,2],[24,7]] },
+  { id:'saints',   name:'When the Saints', emoji:'😇', diff:'med',
+    notes:[[0,0],[1,4],[2,5],[3,7],[5,0],[6,4],[7,5],[8,7],[10,0],[11,4],[12,5],[13,7],
+           [14,4],[15,0],[16,4],[17,2],[18,0]] },
+  { id:'lacuca',   name:'La Cucaracha', emoji:'🌮', diff:'med',
+    notes:[[0,0],[0.5,0],[1,0],[1.5,5],[2.5,9],[3,0],[3.5,0],[4,0],[4.5,5],[5.5,9],
+           [6,9],[6.5,7],[7,5],[7.5,4],[8,5],[8.5,7],[9.5,7],[10,5],[11,4],[12,2],[13,4]] },
+  { id:'hava',     name:'Hava Nagila (intro)', emoji:'💃', diff:'med',
+    notes:[[0,2],[1,3],[2,5],[3,5],[4,3],[5,5],[6,7],[7,7],[8,5],[9,3],[10,2],[11,3],
+           [12,5],[13,3],[14,2],[15,0]] },
+  // ---- Quick rhythms (5-10 honks) ----
+  { id:'shave',    name:'Shave and a Haircut', emoji:'💈', diff:'easy',
+    notes:[[0,0],[1,-5],[1.5,-5],[2,-3],[3,0],[4.5,-2],[5,0]] },
+  { id:'charge',   name:'Charge! (stadium)', emoji:'🏟️', diff:'easy',
+    notes:[[0,0],[0.75,4],[1.5,7],[2.25,9],[3,7]] },
+  { id:'sos',      name:'SOS (Morse)', emoji:'🆘', diff:'easy',
+    notes:[[0,0],[0.4,0],[0.8,0],[1.5,0],[2.3,0],[3.1,0],[4,0],[4.4,0],[4.8,0]] },
+  { id:'cha',      name:'Cha-Cha-Cha', emoji:'💃', diff:'easy',
+    notes:[[0,0],[0.5,2],[1,4],[2,4],[2.5,4],[3,4]] },
+  { id:'wedding',  name:'Here Comes the Bride', emoji:'💒', diff:'easy',
+    notes:[[0,0],[1,5],[1.75,5],[2.5,5],[4,0],[5,7],[5.75,5],[6.5,4],[7,5]] },
+  { id:'taco',     name:'Taco Tuesday Beat', emoji:'🌮', diff:'easy',
+    notes:[[0,0],[0.5,0],[1,4],[1.5,4],[2,7],[3,4],[3.5,4],[4,0]] },
+  // Hard / longer
+  { id:'odejoy',   name:'Ode to Joy', emoji:'🎵', diff:'med',
+    notes:[[0,4],[1,4],[2,5],[3,7],[4,7],[5,5],[6,4],[7,2],[8,0],[9,0],[10,2],[11,4],
+           [12,4],[12.75,2],[13.5,2],[15,4],[16,4],[17,5],[18,7],[19,7],[20,5],[21,4],[22,2],
+           [23,0],[24,0],[25,2],[26,4],[27,2],[27.75,0],[28.5,0]] },
+  { id:'imperial', name:'Imperial March (Star Wars)', emoji:'⚔️', diff:'hard',
+    notes:[[0,7],[1,7],[2,7],[3,3],[3.5,10],[4,7],[5,3],[5.5,10],[6,7],
+           [8,14],[9,14],[10,14],[11,15],[11.5,10],[12,6],[13,3],[13.5,10],[14,7]] },
+  { id:'tetris',   name:'Tetris Theme', emoji:'🟦', diff:'hard',
+    notes:[[0,4],[1,-1],[1.5,0],[2,2],[2.5,0],[3,-1],[4,-3],[5,-3],[5.5,0],
+           [6,4],[7,2],[7.5,0],[8,-1],[9,-1],[9.5,0],[10,2],[11,4],[12,0],[13,-3],[14,-3]] },
+  { id:'pirates',  name:'Pirates of Caribbean', emoji:'🏴‍☠️', diff:'hard',
+    notes:[[0,-5],[0.5,-1],[1,2],[1.5,2],[2,2],[2.5,3],[3,5],[3.5,5],[4,5],[4.5,7],
+           [5,3],[5.5,3],[6,2],[6.5,0],[7,2],[8,-5],[8.5,-1],[9,2],[9.5,2],[10,2],
+           [11,5],[11.5,7],[12,7],[12.5,8],[13,7],[13.5,5],[14,2]] },
+  { id:'anthem',   name:'Star-Spangled Banner', emoji:'🇺🇸', diff:'hard',
+    notes:[[0,4],[1,0],[2.5,-3],[3.5,0],[4.5,4],[5.5,7],[7,12],[9.5,9],[10.5,4],[11.5,3],
+           [13,0],[13.5,2],[14,4],[14.5,4],[15.5,-3],[16.5,0],[18,4],[20,0],[21.5,-3],
+           [22.5,0],[23.5,4],[24.5,7],[26,12],[28.5,9],[29.5,4],[30.5,3],[32,0]] },
+  // ---- Long pieces (60+ notes) ----
+  { id:'cucalong', name:'La Cucaracha (full)', emoji:'🎺', diff:'hard',
+    notes:[[0,0],[0.5,0],[1,0],[1.5,5],[2.5,9],[3,0],[3.5,0],[4,0],[4.5,5],[5.5,9],
+           [6,9],[6.5,7],[7,5],[7.5,4],[8,5],[8.5,7],[9.5,7],[10,5],[11,4],[12,2],[13,4],
+           [14,0],[14.5,0],[15,0],[15.5,5],[16.5,9],[17,0],[17.5,0],[18,0],[18.5,5],[19.5,9],
+           [20,9],[20.5,7],[21,5],[21.5,4],[22,5],[22.5,7],[23.5,7],[24,5],[25,4],[26,2],[27,0]] },
+  { id:'jingleX',  name:'Jingle Bells (extended)', emoji:'🎄', diff:'hard',
+    notes:[[0,4],[1,4],[2,4],[4,4],[5,4],[6,4],[8,4],[9,7],[10,0],[11,2],[12.5,4],
+           [14,5],[15,5],[15.5,5],[16,5],[17,4],[18,4],[18.5,4],[19,4],[20,2],[21,2],[22,4],[23,2],[24,7],
+           [26,4],[27,4],[28,4],[30,4],[31,4],[32,4],[34,4],[35,7],[36,0],[37,2],[38.5,4],
+           [40,5],[41,5],[41.5,5],[42,5],[43,4],[44,4],[44.5,4],[45,4],[46,7],[47,7],[48,5],[49,2],[50,0]] },
+  { id:'medley',   name:"Wedding Medley", emoji:'💍', diff:'hard',
+    notes:[[0,0],[1,5],[1.75,5],[2.5,5],[4,0],[5,7],[5.75,5],[6.5,4],[7,5],
+           [9,4],[10,4],[11,5],[12,7],[13,7],[14,5],[15,4],[16,2],[17,0],[17.75,0],[18.5,2],[19.25,4],
+           [21,0],[22,0],[22.5,4],[23,7],[24,7],[24.5,4],[25,0],
+           [27,0],[28,5],[28.75,5],[29.5,5],[31,0],[32,7],[32.75,5],[33.5,4],[34,5]] },
+  // ---- Folk / kids classics ----
+  { id:'yankee',   name:'Yankee Doodle', emoji:'🇺🇸', diff:'easy',
+    notes:[[0,0],[1,0],[2,2],[3,4],[4,0],[5,4],[6,2],[8,0],[9,0],[10,2],[11,4],[12,0],[14,-1]] },
+  { id:'mac',      name:'Old MacDonald', emoji:'🐔', diff:'easy',
+    notes:[[0,7],[1,7],[2,7],[3,2],[4,4],[5,4],[6,2],[8,11],[9,11],[10,9],[11,9],[12,7]] },
+  { id:'row',      name:'Row Row Row Your Boat', emoji:'🚣', diff:'easy',
+    notes:[[0,0],[1,0],[2,0],[2.75,2],[3.5,4],[4,4],[4.75,2],[5.5,4],[6.25,5],[7,7]] },
+  { id:'hotbuns',  name:'Hot Cross Buns', emoji:'🥐', diff:'easy',
+    notes:[[0,4],[1,2],[2,0],[4,4],[5,2],[6,0],[8,0],[8.5,0],[9,0],[9.5,0],[10,2],[10.5,2],[11,2],[11.5,2],[12,4],[13,2],[14,0]] },
+  { id:'frere',    name:'Frère Jacques', emoji:'🛌', diff:'easy',
+    notes:[[0,0],[1,2],[2,4],[3,0],[4,0],[5,2],[6,4],[7,0],[8,4],[8.5,5],[9,7],[10,4],[10.5,5],[11,7]] },
+  // ---- Movie / TV themes ----
+  { id:'lonerang', name:'Lone Ranger / William Tell', emoji:'🤠', diff:'med',
+    notes:[[0,7],[0.5,7],[1,4],[1.5,7],[2,0],[2.5,7],[3,4],[3.5,7],[4,0],[4.5,0],[5,7],[5.5,7],[6,4],[6.5,7],[7,0],[7.5,0]] },
+  { id:'elise',    name:'Für Elise (opening)', emoji:'🎹', diff:'med',
+    notes:[[0,4],[0.5,3],[1,4],[1.5,3],[2,4],[2.5,-1],[3,2],[3.5,0],[4,-3]] },
+  { id:'bond',     name:'James Bond Theme', emoji:'🕴️', diff:'med',
+    notes:[[0,4],[0.5,6],[1,7],[2,7],[2.5,7],[3,7],[3.5,5],[4,5],[4.5,5],[5,6],[5.5,7]] },
+  { id:'mi',       name:'Mission Impossible', emoji:'🕵️', diff:'med',
+    notes:[[0,0],[0.5,0],[1,3],[1.5,-2],[2,0],[2.5,0],[3,3],[3.5,6],[4,0],[4.5,0],[5,3],[5.5,-2]] },
+  { id:'jaws',     name:'Jaws Theme', emoji:'🦈', diff:'easy',
+    notes:[[0,4],[1,5],[2,4],[2.5,5],[3,4],[3.25,5],[3.5,4],[3.75,5],[4,4],[4.125,5]] },
+  // ---- Pop / Rock ----
+  { id:'7nation',  name:'Seven Nation Army', emoji:'🎸', diff:'med',
+    notes:[[0,4],[1,4],[1.5,7],[2,4],[3,2],[3.75,0],[4.5,-1],[6,4],[7,4],[7.5,7],[8,4],[9,2],[9.75,0],[10.5,-1]] },
+  { id:'tiger',    name:'Eye of the Tiger', emoji:'🐅', diff:'med',
+    notes:[[0,0],[0.5,0],[1,0],[1.75,0],[2.5,7],[2.75,7],[3,7],[3.5,5],[4,3]] },
+  { id:'smoke',    name:'Smoke on the Water', emoji:'🚭', diff:'med',
+    notes:[[0,7],[1,10],[2,12],[3,7],[4,10],[5,13],[5.5,12],[6,7],[7,10],[8,12],[9,10],[10,7]] },
+  { id:'champ',    name:'We Are the Champions', emoji:'🏆', diff:'med',
+    notes:[[0,5],[1,5],[2,7],[3,9],[4,10],[5,9],[6,9]] },
+  { id:'macarena', name:'Macarena', emoji:'💃', diff:'med',
+    notes:[[0,2],[0.5,2],[1,2],[1.5,2],[2,5],[2.5,4],[3,2],[3.5,2],[4,4],[4.5,2]] },
+  // ---- Sports / stadium ----
+  { id:'ole',      name:'Olé Olé Olé', emoji:'⚽', diff:'easy',
+    notes:[[0,4],[1,4],[2,4],[3,5],[3.5,4],[4,2],[5,2],[6,4]] },
+  { id:'ballgame', name:'Take Me Out to the Ball Game', emoji:'⚾', diff:'med',
+    notes:[[0,0],[1,9],[2,7],[3,5],[4,0],[5,9],[6,7]] },
+  // ---- Holiday ----
+  { id:'auld',     name:'Auld Lang Syne', emoji:'🎆', diff:'med',
+    notes:[[0,7],[1,7],[2,7],[3,12],[4,10],[5,9],[6,10],[7,9],[8,7],[9,7],[10,10],[11,14],[12,15],[14,12]] },
+  { id:'deck',     name:'Deck the Halls', emoji:'🎁', diff:'med',
+    notes:[[0,7],[1,5],[1.5,4],[2,2],[3,0],[3.5,2],[4,4],[4.5,0],[5,2],[5.5,4],[6,5],[6.5,2]] },
+  { id:'rudolph',  name:'Rudolph (intro)', emoji:'🦌', diff:'easy',
+    notes:[[0,7],[1,9],[2,7],[3,4],[4,9],[5,7],[6,5],[7,2]] },
+  // ---- Pattern rhythms ----
+  { id:'siren',    name:'Siren Pattern', emoji:'🚨', diff:'easy',
+    notes:[[0,12],[1,0],[2,12],[3,0],[4,12],[5,0]] },
+  { id:'train',    name:'Train Whistle', emoji:'🚂', diff:'easy',
+    notes:[[0,7],[1.5,7],[3,0],[3.25,12]] },
+  { id:'hatdance', name:'Mexican Hat Dance', emoji:'🎩', diff:'med',
+    notes:[[0,2],[1,2],[2,2],[3,7],[3.5,5],[4,4],[5,2]] },
+  // ---- More nursery rhymes ----
+  { id:'itsybitsy', name:'Itsy Bitsy Spider', emoji:'🕷️', diff:'easy', cat:'nursery',
+    notes:[[0,0],[1,0],[2,0],[3,5],[4,9],[5,9],[6,9],[8,7],[9,5],[10,4],[11,2],[12,0]] },
+  { id:'london', name:'London Bridge', emoji:'🌉', diff:'easy', cat:'nursery',
+    notes:[[0,7],[0.5,9],[1,7],[1.5,5],[2,4],[2.5,5],[3,7],[4,2],[5,4],[6,5],[8,4],[9,5],[10,7]] },
+  { id:'wheels', name:'Wheels on the Bus', emoji:'🚌', diff:'easy', cat:'nursery',
+    notes:[[0,0],[1,5],[2,5],[3,5],[4,5],[5,9],[6,12],[7,9],[8,5],[9,4],[10,2],[11,0]] },
+  { id:'pop', name:'Pop Goes the Weasel', emoji:'🎪', diff:'easy', cat:'nursery',
+    notes:[[0,0],[0.5,2],[1,4],[1.5,5],[2,4],[3,0],[3.5,2],[4,4],[4.5,2],[5,0],[6,0],[6.5,2],[7,4],[7.5,5],[8,4],[9,0],[9.5,7],[10,4]] },
+  { id:'bingo', name:'B-I-N-G-O', emoji:'🐶', diff:'easy', cat:'nursery',
+    notes:[[0,0],[1,0],[2,4],[3,4],[4,7],[5,5],[6,4],[7,2],[8,0],[10,7],[11,5],[12,4],[13,2],[14,0]] },
+  { id:'baablack', name:'Baa Baa Black Sheep', emoji:'🐑', diff:'easy', cat:'nursery',
+    notes:[[0,0],[1,0],[2,7],[3,7],[4,9],[4.5,10],[5,11],[5.5,12],[6,9],[8,7]] },
+  { id:'teapot', name:"I'm a Little Teapot", emoji:'🫖', diff:'easy', cat:'nursery',
+    notes:[[0,0],[1,2],[2,4],[3,5],[4,7],[5,4],[6,0],[7,7],[8,9],[9,7],[10,5],[11,4],[12,2],[13,0]] },
+  { id:'hickory', name:'Hickory Dickory Dock', emoji:'⏰', diff:'easy', cat:'nursery',
+    notes:[[0,7],[1,9],[2,7],[3,4],[4,5],[5,7],[6,5],[7,4],[8,7],[8.5,7],[9,7]] },
+  { id:'thisOldMan', name:'This Old Man', emoji:'🧓', diff:'easy', cat:'nursery',
+    notes:[[0,0],[0.5,4],[1,0],[1.5,4],[2,5],[2.5,4],[3,5],[4,7],[4.5,5],[5,7],[5.5,5],[6,4],[7,0]] },
+  { id:'humpty', name:'Humpty Dumpty', emoji:'🥚', diff:'easy', cat:'nursery',
+    notes:[[0,4],[1,5],[2,7],[3,9],[4,7],[5,5],[6,4],[8,5],[9,7],[10,5],[11,4],[12,2],[13,0]] },
+  // ---- Hip-hop / modern beats ----
+  { id:'boombap', name:'Boom Bap', emoji:'🥁', diff:'easy', cat:'beat',
+    notes:[[0,0],[1,7],[2,0],[2.5,0],[3,7],[4,0],[5,7],[6,0],[6.5,0],[7,7]] },
+  { id:'trap', name:'Trap Triplets', emoji:'🎧', diff:'med', cat:'beat',
+    notes:[[0,0],[0.33,0],[0.67,0],[1,7],[1.33,0],[1.67,0],[2,0],[2.33,7],[2.67,0],[3,7]] },
+  { id:'reggaeton', name:'Reggaeton Dembow', emoji:'🌴', diff:'med', cat:'beat',
+    notes:[[0,0],[0.75,7],[1,5],[1.5,0],[2,0],[2.75,7],[3,5],[3.5,0]] },
+  { id:'dnb', name:'Drum & Bass', emoji:'⚡', diff:'hard', cat:'beat',
+    notes:[[0,0],[1.5,7],[2,5],[3.5,7],[4,0],[4.5,0],[5.5,7],[6,5],[7.5,7]] },
+  { id:'house', name:'House (4-on-floor)', emoji:'🏠', diff:'easy', cat:'beat',
+    notes:[[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0]] },
+  { id:'trapdrop', name:'Trap Drop', emoji:'💥', diff:'med', cat:'beat',
+    notes:[[0,0],[0.5,0],[1.5,7],[2,0],[2.5,0],[3.5,12],[4,7],[4.5,0]] },
+  { id:'bounce', name:'Atlanta Bounce', emoji:'🎯', diff:'med', cat:'beat',
+    notes:[[0,0],[0.5,12],[1,0],[1.5,12],[2,7],[2.5,0],[3,12],[3.5,0]] },
+  { id:'bigbeat', name:'Big Beat', emoji:'🔊', diff:'med', cat:'beat',
+    notes:[[0,0],[1,7],[2,0],[2.5,7],[3,12],[4,0],[5,7],[6,0],[6.5,7],[7,12]] },
+  // ---- More movie/TV ----
+  { id:'indiana', name:'Indiana Jones', emoji:'🤠', diff:'med', cat:'movie',
+    notes:[[0,0],[0.5,2],[1,4],[2,5],[4,7],[4.5,9],[5,10],[7,12],[7.5,11],[8,12]] },
+  { id:'doctorwho', name:'Doctor Who', emoji:'🌀', diff:'med', cat:'movie',
+    notes:[[0,0],[0.5,0],[1,5],[1.5,5],[2,0],[2.5,0],[3,5],[4,7],[4.5,7],[5,2],[5.5,2],[6,7],[7,0]] },
+  { id:'addams', name:'The Addams Family', emoji:'👻', diff:'easy', cat:'movie',
+    notes:[[0,0],[1,5],[2,9],[3,5],[3.25,0],[3.5,0],[4,0],[5,5],[6,9],[7,5]] },
+  { id:'gameofthrones', name:'Game of Thrones', emoji:'🐉', diff:'med', cat:'movie',
+    notes:[[0,0],[0.5,7],[1,3],[1.5,5],[2,0],[2.5,7],[3,3],[3.5,5],[4,0],[4.5,7],[5,3],[5.5,5]] },
+  { id:'pinkpanther', name:'Pink Panther', emoji:'🐾', diff:'hard', cat:'movie',
+    notes:[[0,-3],[0.5,-1],[1,0],[1.5,2],[2,3],[2.5,2],[3.5,3],[4,5],[4.5,3],[5,2],[6,0]] },
+  // ---- More holiday ----
+  { id:'silent', name:'Silent Night', emoji:'🌙', diff:'med', cat:'holiday',
+    notes:[[0,7],[1,9],[2,7],[3,4],[5,7],[6,9],[7,7],[8,4],[10,14],[10.5,14],[11,11]] },
+  { id:'wewish', name:'We Wish You a Merry Christmas', emoji:'🎅', diff:'med', cat:'holiday',
+    notes:[[0,0],[1,5],[2,5],[2.5,7],[3,5],[3.5,4],[4,2],[4.5,2],[5,2],[5.5,7],[6,7],[6.5,9],[7,7]] },
+];
+// Map for retroactively tagging older songs with a category
+const SONG_CATEGORY_MAP = {
+  rockyou:'stadium', charge:'stadium', ole:'stadium', ballgame:'stadium', wedding:'wedding',
+  cha:'beat', sos:'beat', siren:'beat', train:'beat', taco:'beat', hatdance:'folk', shave:'beat',
+  twinkle:'nursery', mary:'nursery', birthday:'classic', mac:'nursery', row:'nursery', hotbuns:'nursery', frere:'nursery', yankee:'nursery', rudolph:'holiday',
+  '7nation':'pop', tiger:'pop', smoke:'pop', champ:'pop', macarena:'pop',
+  bond:'movie', mi:'movie', jaws:'movie', imperial:'movie', tetris:'movie', pirates:'movie', lonerang:'movie',
+  elise:'classical', odejoy:'classical', fifth:'classical',
+  jingle:'holiday', jingleX:'holiday', auld:'holiday', deck:'holiday', anthem:'patriotic', medley:'wedding',
+  cucalong:'folk', hava:'folk', saints:'folk', lacuca:'folk',
+};
+function songCat(s) { return s.cat || SONG_CATEGORY_MAP[s.id] || 'classic'; }
+
+// =================================================================
+// STATE
+// =================================================================
+const state = {
+  car: null,
+  inMood: true,
+  drivers: new Map(),   // id -> {id, lat, lng, car, fake}
+  jam: null,
+  ac: null,
+  myId: 'me_' + Math.random().toString(36).slice(2, 10),
+  myLoc: null,
+  map: null,
+  myMarker: null,
+  markers: new Map(),
+  channel: null,
+  room: 'nearby',
+  code: '',
+  speedMps: 0,
+  geoWatchId: null,
+  stats: JSON.parse(localStorage.getItem('hj_stats') || '{"jams":0,"hits":0,"cues":0,"songs":{}}'),
+  selectedMake: null,
+  pendingModel: null,
+};
+
+// =================================================================
+// NAVIGATION
+// =================================================================
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  if (id === 'car-make') renderMakes();
+  if (id === 'home') onHome();
+  if (id === 'song') renderSongs();
+  if (id === 'practice-pick') renderPracticeSongs();
+  if (id === 'end') updateStatsUI();
+  if (id === 'create-song') renderCustomList();
+}
+
+// =================================================================
+// PERMISSIONS
+// =================================================================
+function askLocation() {
+  if (!navigator.geolocation) return setPerm('loc', 'denied', 'Not supported');
+  navigator.geolocation.getCurrentPosition(
+    (p) => { setPerm('loc', 'granted', 'Allowed'); state.myLoc = { lat: p.coords.latitude, lng: p.coords.longitude }; startGeoWatch(); },
+    () => setPerm('loc', 'denied', 'Denied'),
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+function askNotif() {
+  if (!('Notification' in window)) return setPerm('notif', 'denied', 'Not supported');
+  Notification.requestPermission().then(r => setPerm('notif', r === 'granted' ? 'granted' : 'denied', r === 'granted' ? 'Allowed' : 'Denied'));
+}
+function setPerm(k, cls, text) {
+  const el = document.getElementById('perm-' + k);
+  el.className = 'perm-status ' + cls;
+  el.textContent = text;
+}
+function startGeoWatch() {
+  if (state.geoWatchId !== null) navigator.geolocation.clearWatch(state.geoWatchId);
+  state.geoWatchId = navigator.geolocation.watchPosition(
+    p => {
+      const wasFirst = !state.myLoc;
+      state.myLoc = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
+      state.speedMps = p.coords.speed || 0;
+      if (state.map && state.myMarker) {
+        state.myMarker.setLatLng([state.myLoc.lat, state.myLoc.lng]);
+        if (wasFirst) state.map.setView([state.myLoc.lat, state.myLoc.lng], 17);
+      }
+      updateSpeedWarning();
+      renderDriverMarkers();
+      // If our grid bucket changed, re-subscribe to a new channel
+      const newName = channelName();
+      if (state.channel && state.channel.topic !== 'realtime:' + newName) ensureChannel();
+      broadcastMe();
+    },
+    err => { console.warn('geo error', err); },
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+  );
+}
+
+function recenterMap() {
+  if (state.map && state.myLoc) state.map.setView([state.myLoc.lat, state.myLoc.lng], 17);
+}
+
+// =================================================================
+// CAR PICKER
+// =================================================================
+function renderMakes() {
+  const tabs = document.getElementById('make-tabs');
+  tabs.innerHTML = '';
+  MAKES.forEach(m => {
+    const el = document.createElement('div');
+    el.className = 'make-tab' + (state.selectedMake === m ? ' selected' : '');
+    el.textContent = m;
+    el.onclick = () => { state.selectedMake = m; renderMakes(); renderMakeGrid(); };
+    tabs.appendChild(el);
+  });
+  if (!state.selectedMake) state.selectedMake = MAKES[0];
+  document.querySelectorAll('.make-tab').forEach(t => t.classList.toggle('selected', t.textContent === state.selectedMake));
+  renderMakeGrid();
+}
+function renderMakeGrid() {
+  // When tab is picked, jump straight to models for that make
+  const grid = document.getElementById('make-grid');
+  grid.innerHTML = '';
+  const cars = CARS_DB.filter(c => c.make === state.selectedMake);
+  cars.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'card' + (state.car && state.car.make === c.make && state.car.model === c.model ? ' selected' : '');
+    el.innerHTML = `<div class="car-icon" style="height:38px;display:flex;align-items:center;justify-content:center">${carSVG(c, 32)}</div><div class="car-name">${c.model}</div><div class="car-horn">${c.make} · ${c.desc}</div><div class="horn-spec">${c.freq[0]}+${c.freq[1]} Hz</div>`;
+    el.onclick = () => {
+      state.pendingModel = c;
+      playHorn(c, 0.55);
+      document.querySelectorAll('#make-grid .card').forEach(n => n.classList.remove('selected'));
+      el.classList.add('selected');
+      state.car = c;
+      saveCar();
+      // auto-advance after a beat so they hear it
+      setTimeout(() => { if (state.car === c) onCarPicked(); }, 700);
+    };
+    grid.appendChild(el);
+  });
+}
+function onCarPicked() {
+  if (!state.car) return;
+  go('home');
+}
+function saveCar() { localStorage.setItem('hj_car', JSON.stringify(state.car)); }
+function loadCar() {
+  const raw = localStorage.getItem('hj_car');
+  if (raw) { try { state.car = JSON.parse(raw); } catch(e){} }
+}
+
+// =================================================================
+// HOME / MAP
+// =================================================================
+function onHome() {
+  loadCar();
+  document.getElementById('my-car-name').textContent = state.car ? state.car.model : 'Pick car';
+  if (!state.car) { go('car-make'); return; }
+  ensureMap();
+  updateMoodUI();
+  updateSpeedWarning();
+  ensureChannel();
+  // Show how many songs work with this car (after my rebalance fix, all of them do)
+  const hint = document.getElementById('song-count-hint');
+  if (hint) hint.textContent = `🎵 ${SONGS.length} songs work with your ${state.car.make} ${state.car.model}`;
+}
+function ensureMap() {
+  if (state.map) { setTimeout(() => state.map.invalidateSize(), 50); return; }
+  const lat = state.myLoc?.lat ?? 40.7580; // default: Times Square if no GPS
+  const lng = state.myLoc?.lng ?? -73.9855;
+  state.map = L.map('map', { zoomControl: false, attributionControl: false }).setView([lat, lng], 16);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(state.map);
+  const youIcon = L.divIcon({ className: 'car-marker', html: `<div class="car-marker-inner you">${state.car ? carSVG(state.car, 22) : '🚗'}</div>`, iconSize: [40,40] });
+  state.myMarker = L.marker([lat, lng], { icon: youIcon }).addTo(state.map);
+  setTimeout(() => state.map.invalidateSize(), 100);
+}
+function renderDriverMarkers() {
+  // remove stale
+  state.markers.forEach((mk, id) => { if (!state.drivers.has(id)) { mk.remove(); state.markers.delete(id); } });
+  // add/update
+  state.drivers.forEach(d => {
+    const html = `<div class="car-marker-inner ${d.invited ? 'invited' : 'other'}">${carSVG(d.car, 22)}</div>`;
+    const icon = L.divIcon({ className: 'car-marker', html, iconSize: [40,40] });
+    if (state.markers.has(d.id)) {
+      state.markers.get(d.id).setLatLng([d.lat, d.lng]).setIcon(icon);
+    } else {
+      const mk = L.marker([d.lat, d.lng], { icon }).addTo(state.map);
+      mk.on('click', () => { d.invited = !d.invited; renderDriverMarkers(); });
+      state.markers.set(d.id, mk);
+    }
+  });
+  document.getElementById('status-text').textContent = state.inMood
+    ? `${state.drivers.size} driver${state.drivers.size === 1 ? '' : 's'} nearby`
+    : `Quiet mode (${state.drivers.size} nearby)`;
+}
+function updateMoodUI() {
+  document.getElementById('mood-switch').classList.toggle('on', state.inMood);
+  document.getElementById('status-dot').classList.toggle('offline', !state.inMood);
+  renderDriverMarkers();
+}
+function toggleMood() { state.inMood = !state.inMood; updateMoodUI(); broadcastMe(); }
+
+function updateSpeedWarning() {
+  const slot = document.getElementById('speed-warn-slot');
+  const kph = (state.speedMps || 0) * 3.6;
+  if (kph > 12) {
+    slot.innerHTML = `<div class="speed-warn">🚦 You're moving (${Math.round(kph)} km/h). Honk Jam is locked until you stop.</div>`;
+    document.getElementById('status-dot').classList.add('warn');
+  } else { slot.innerHTML = ''; }
+}
+
+// =================================================================
+// ROOMS — nearby vs friend code
+// =================================================================
+function setRoom(r) {
+  state.room = r;
+  document.querySelectorAll('.room-tab').forEach(t => t.classList.toggle('selected', t.dataset.room === r));
+  document.getElementById('code-slot').style.display = r === 'code' ? 'block' : 'none';
+  if (r === 'code') {
+    const inp = document.getElementById('code-in');
+    inp.oninput = () => { state.code = inp.value.replace(/\D/g,'').slice(0,4); inp.value = state.code; ensureChannel(); };
+  }
+  ensureChannel();
+}
+
+// =================================================================
+// SUPABASE REALTIME
+// =================================================================
+function channelName() {
+  if (state.room === 'code' && state.code.length === 4) return 'honkestra:code:' + state.code;
+  // Nearby: bucket by ~500 m grid using lat/lng rounded to 0.005°
+  if (state.myLoc) {
+    const la = Math.round(state.myLoc.lat * 200) / 200;
+    const ln = Math.round(state.myLoc.lng * 200) / 200;
+    return `honkestra:geo:${la},${ln}`;
+  }
+  return 'honkestra:geo:demo';
+}
+// Distance in meters between two lat/lng points
+function distM(a, b) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const la1 = toRad(a.lat), la2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+async function ensureChannel() {
+  const name = channelName();
+  if (state.channel && state.channel.topic === 'realtime:' + name) { broadcastMe(); return; }
+  if (state.channel) { try { await state.channel.unsubscribe(); } catch(e){} }
+  state.drivers.forEach((_,id) => { /* keep fake drivers */ });
+  // remove non-fake
+  [...state.drivers.entries()].forEach(([id,d]) => { if (!d.fake) state.drivers.delete(id); });
+  renderDriverMarkers();
+
+  const ch = sb.channel(name, { config: { presence: { key: state.myId } } });
+  ch.on('presence', { event: 'sync' }, () => {
+    const all = ch.presenceState();
+    [...state.drivers.entries()].forEach(([id,d]) => { if (!d.fake) state.drivers.delete(id); });
+    Object.entries(all).forEach(([id, metas]) => {
+      if (id === state.myId) return;
+      const m = metas[0];
+      if (!m || !m.car || !m.lat) return;
+      state.drivers.set(id, { id, lat: m.lat, lng: m.lng, car: m.car });
+    });
+    renderDriverMarkers();
+  });
+  ch.on('broadcast', { event: 'invite' }, ({ payload }) => {
+    if (payload.to === state.myId) showInvite(payload);
+  });
+  ch.on('broadcast', { event: 'jam_request' }, ({ payload }) => {
+    if (payload.from === state.myId) return; // ignore my own
+    if (!state.inMood) return;
+    // Optional distance check (only show if within 500 m)
+    if (payload.loc && state.myLoc) {
+      const m = distM(state.myLoc, payload.loc);
+      if (m > 500) return;
+    }
+    showInvite({ from: payload.from, fromCar: payload.fromCar });
+  });
+  ch.on('broadcast', { event: 'lobby_open' }, ({ payload }) => {
+    if (payload.hostId === state.myId) return;
+    const song = SONGS.find(s => s.id === payload.songId);
+    if (!song) return;
+    if (!state.inMood) return;
+    state.lobby = { songId: song.id, isHost: false, ready: new Set([payload.hostId]), hostId: payload.hostId, songObj: song };
+    document.getElementById('lobby-song').textContent = `${song.emoji} ${song.name}`;
+    document.getElementById('lobby-hint').textContent = 'The host will start the jam once everyone is ready.';
+    renderLobbyReady();
+    go('lobby');
+    if (Notification.permission === 'granted') new Notification('🎺 Jam starting!', { body: `Host picked: ${song.name}. Tap to join.` });
+  });
+  ch.on('broadcast', { event: 'lobby_ready' }, ({ payload }) => {
+    if (!state.lobby) return;
+    if (payload.ready) state.lobby.ready.add(payload.driverId);
+    else state.lobby.ready.delete(payload.driverId);
+    renderLobbyReady();
+  });
+  ch.on('broadcast', { event: 'lobby_close' }, ({ payload }) => {
+    if (state.lobby && state.lobby.hostId === payload.hostId && !state.lobby.isHost) {
+      state.lobby = null;
+      alert('Host left the lobby.');
+      go('home');
+    }
+  });
+  ch.on('broadcast', { event: 'jam_start' }, ({ payload }) => {
+    if (!state.lobby || payload.songId !== state.lobby.songId) return;
+    if (payload.hostId === state.myId) return; // already starting
+    const song = SONGS.find(s => s.id === payload.songId);
+    if (!song) return;
+    startSyncedJam(song, payload.startAt);
+  });
+  await ch.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') broadcastMe();
+  });
+  state.channel = ch;
+}
+function broadcastMe() {
+  if (!state.channel || !state.car || !state.inMood) return;
+  const lat = state.myLoc?.lat ?? 40.7580 + (Math.random()-0.5)*0.001;
+  const lng = state.myLoc?.lng ?? -73.9855 + (Math.random()-0.5)*0.001;
+  state.channel.track({ car: state.car, lat, lng, ts: Date.now() }).catch(() => {});
+}
+
+let _lastBroadcastAt = 0;
+async function broadcastJamRequest() {
+  if (!state.car) { go('car-make'); return; }
+  if (!state.channel) await ensureChannel();
+  const now = Date.now();
+  if (now - _lastBroadcastAt < 30000) {
+    alert("You just sent one — wait 30 sec before broadcasting again so you don't spam drivers.");
+    return;
+  }
+  _lastBroadcastAt = now;
+  await state.channel.send({
+    type: 'broadcast',
+    event: 'jam_request',
+    payload: { from: state.myId, fromCar: state.car, loc: state.myLoc, ts: now }
+  });
+  // Visual confirmation
+  const slot = document.getElementById('invite-slot');
+  const prev = slot.innerHTML;
+  slot.innerHTML = `<div class="invite-banner" style="background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a"><div style="font-weight:700">📣 Honk sent to drivers nearby!</div></div>`;
+  setTimeout(() => { if (slot.innerHTML.includes('Honk sent')) slot.innerHTML = prev; }, 4000);
+}
+
+function showInvite({ from, fromCar, songId }) {
+  const slot = document.getElementById('invite-slot');
+  const car = fromCar || { icon:'🚗', model:'Driver' };
+  slot.innerHTML = `
+    <div class="invite-banner">
+      <div>
+        <div style="font-weight:700">${car.icon} ${car.make || ''} ${car.model} wants to jam</div>
+        <div style="font-size:13px;opacity:.9">Tap join to play together</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn ghost small" onclick="document.getElementById('invite-slot').innerHTML=''">Skip</button>
+        <button class="btn small" onclick="startJam()">Join</button>
+      </div>
+    </div>`;
+  if (Notification.permission === 'granted') new Notification('🚗 Want to jam?', { body: `${car.model} driver nearby wants to play horns.` });
+}
+
+// =================================================================
+// FAKE / DEMO HELPERS
+// =================================================================
+function spawnFakeDriver() {
+  if (!state.car) { state.car = CARS_DB[0]; saveCar(); }
+  ensureMap();
+  const c = CARS_DB[Math.floor(Math.random() * CARS_DB.length)];
+  const baseLat = state.myLoc?.lat ?? 40.7580;
+  const baseLng = state.myLoc?.lng ?? -73.9855;
+  const id = 'fake_' + Math.random().toString(36).slice(2,8);
+  state.drivers.set(id, { id, lat: baseLat + (Math.random()-0.5)*0.001, lng: baseLng + (Math.random()-0.5)*0.001, car: c, fake: true });
+  renderDriverMarkers();
+}
+function clearFake() {
+  [...state.drivers.entries()].forEach(([id,d]) => { if (d.fake) state.drivers.delete(id); });
+  renderDriverMarkers();
+}
+function fakeInvite() {
+  if (!state.drivers.size) spawnFakeDriver();
+  const first = [...state.drivers.values()][0];
+  showInvite({ from: 'fake', fromCar: first.car });
+}
+
+// =================================================================
+// JAM FLOW
+// =================================================================
+function startJam() {
+  if (state.speedMps * 3.6 > 12) { alert('You are moving — pull over or stop first.'); return; }
+  if (!state.car) { go('car-make'); return; }
+  if (state.drivers.size === 0) { while (state.drivers.size < 2) spawnFakeDriver(); }
+  go('song');
+}
+
+function renderSongs() {
+  document.getElementById('jam-count').textContent = state.drivers.size + 1;
+  renderSongListInto('song-list', false);
+}
+function renderPracticeSongs() {
+  renderSongListInto('practice-song-list', true);
+}
+function renderSongListInto(elId, isPractice) {
+  const list = document.getElementById(elId);
+  list.innerHTML = '';
+  const allCars = isPractice
+    ? [state.car, CARS_DB[5], CARS_DB[14], CARS_DB[28]].filter(Boolean)
+    : (state.car ? [state.car, ...[...state.drivers.values()].map(d => d.car)] : []);
+
+  // Score and filter
+  const FIT_THRESHOLD = 4.5; // avg semitones of stretch — above = song doesn't fit these cars
+  const scored = SONGS.map(s => ({ s, fit: songFit(s, allCars), yours: allCars.length ? countYourNotes(s, allCars) : 0 }));
+  let visible = scored.filter(x => x.fit <= FIT_THRESHOLD && x.yours > 0);
+  // If filter cuts too aggressively, relax — always show at least 8 songs
+  if (visible.length < 8) visible = scored.slice().sort((a,b) => a.fit - b.fit).slice(0, Math.max(8, visible.length));
+  // Sort: best-fit first, then by length ascending
+  visible.sort((a, b) => (a.fit - b.fit) || (a.s.notes.length - b.s.notes.length));
+
+  // Header showing match count
+  const header = document.createElement('div');
+  header.style.cssText = 'font-size:12px;color:#8d96aa;margin-bottom:6px;padding:0 2px';
+  header.innerHTML = allCars.length
+    ? `🎯 <strong style="color:#fff">${visible.length} of ${SONGS.length}</strong> songs fit your jam (${allCars.length} car${allCars.length===1?'':'s'})`
+    : `${SONGS.length} songs available`;
+  list.appendChild(header);
+
+  visible.forEach((entry, idx) => {
+    const s = entry.s;
+    const row = document.createElement('div');
+    row.className = 'song-row';
+    const beats = Math.max(...s.notes.map(n => n[0])) + 2;
+    const dur = Math.round(beats * 0.48);
+    const min = Math.floor(dur/60), sec = dur % 60;
+    const lenStr = min ? `${min}:${sec.toString().padStart(2,'0')}` : `${sec}s`;
+    const diffCls = s.diff === 'easy' ? 'diff-easy' : s.diff === 'med' ? 'diff-med' : 'diff-hard';
+    const yourBadge = allCars.length
+      ? `<span style="color:#ffb800;font-weight:700">🎺 ${entry.yours} for you</span> · `
+      : '';
+    const fitBadge = (allCars.length && idx < 3 && entry.fit < 3)
+      ? `<span class="difficulty diff-easy" style="margin-left:6px">🎯 BEST FIT</span>` : '';
+    row.innerHTML = `
+      <div style="pointer-events:none;flex:1">
+        <div class="song-name">${s.emoji} ${s.name}<span class="difficulty ${diffCls}">${s.diff.toUpperCase()}</span>${fitBadge}</div>
+        <div class="song-meta">${yourBadge}${s.notes.length} honks total · ${lenStr}</div>
+      </div>
+      <div style="font-size:24px;pointer-events:none">▶️</div>`;
+    const handler = (ev) => { ev.preventDefault(); ev.stopPropagation();
+      if (isPractice) prepareJam(s, true);
+      else openLobby(s, true);
+    };
+    row.addEventListener('click', handler);
+    row.addEventListener('touchend', handler);
+    list.appendChild(row);
+  });
+}
+
+// Assign song notes to cars so every car gets a fair share. Greedy by pitch
+// match, then rebalance so no car gets less than floor(total/numCars).
+function assignSongNotes(song, allCars) {
+  const baseMidi = 60;
+  const notes = song.notes.map(([beat, semi]) => {
+    const targetFreq = 440 * Math.pow(2, (baseMidi + semi - 69)/12);
+    let bestIdx = 0, bestDist = Infinity;
+    allCars.forEach((c, i) => {
+      const avg = (c.freq[0] + c.freq[1]) / 2;
+      let d = Infinity;
+      for (let o = -2; o <= 2; o++) {
+        const shifted = targetFreq * Math.pow(2, o);
+        d = Math.min(d, Math.abs(avg - shifted));
+      }
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    });
+    return { beat, semi, carIdx: bestIdx };
+  });
+  // Rebalance
+  const target = Math.max(1, Math.floor(notes.length / allCars.length));
+  const counts = new Array(allCars.length).fill(0);
+  notes.forEach(n => counts[n.carIdx]++);
+  for (let car = 0; car < allCars.length; car++) {
+    let safety = 200;
+    while (counts[car] < target && safety-- > 0) {
+      let maxCar = 0;
+      for (let i = 0; i < counts.length; i++) if (counts[i] > counts[maxCar]) maxCar = i;
+      if (counts[maxCar] <= target) break;
+      // pick a note from maxCar whose pitch is closest to "car"'s avg — least painful swap
+      const carAvg = (allCars[car].freq[0] + allCars[car].freq[1]) / 2;
+      let bestNoteIdx = -1, bestNoteDist = Infinity;
+      notes.forEach((n, idx) => {
+        if (n.carIdx !== maxCar) return;
+        const target2 = 440 * Math.pow(2, (baseMidi + n.semi - 69)/12);
+        let d = Infinity;
+        for (let o = -2; o <= 2; o++) d = Math.min(d, Math.abs(carAvg - target2 * Math.pow(2, o)));
+        if (d < bestNoteDist) { bestNoteDist = d; bestNoteIdx = idx; }
+      });
+      if (bestNoteIdx < 0) break;
+      notes[bestNoteIdx].carIdx = car;
+      counts[maxCar]--; counts[car]++;
+    }
+  }
+  return notes;
+}
+
+function countYourNotes(song, allCars) {
+  return assignSongNotes(song, allCars).filter(n => n.carIdx === 0).length;
+}
+
+// Average semitone stretch each car has to do to play its assigned notes.
+// Lower = song fits these cars naturally. Higher = harsh pitch-shifting required.
+function songFit(song, allCars) {
+  if (!allCars.length) return 99;
+  const notes = assignSongNotes(song, allCars);
+  let total = 0;
+  notes.forEach(n => {
+    const car = allCars[n.carIdx];
+    const carAvg = (car.freq[0] + car.freq[1]) / 2;
+    let target = 440 * Math.pow(2, (60 + n.semi - 69) / 12);
+    // Move target into the same octave as the car's natural pitch
+    while (target < carAvg / 1.4) target *= 2;
+    while (target > carAvg * 1.4) target /= 2;
+    const semiOff = Math.abs(12 * Math.log2(target / carAvg));
+    total += semiOff;
+  });
+  return total / notes.length;
+}
+
+function toggleRecordJam() {
+  state.recordNextJam = !state.recordNextJam;
+  document.getElementById('rec-switch').classList.toggle('on', state.recordNextJam);
+}
+function toggleBattle() {
+  state.battleMode = !state.battleMode;
+  document.getElementById('battle-switch').classList.toggle('on', state.battleMode);
+  renderSongs(); // refresh list to reflect any changes
+}
+
+function prepareJam(song, isPractice) {
+  const allCars = isPractice
+    ? [state.car, CARS_DB[5], CARS_DB[14], CARS_DB[28]].filter(Boolean)
+    : [state.car, ...[...state.drivers.values()].map(d => d.car)];
+  const notes = assignSongNotes(song, allCars);
+  const yourNotes = notes.filter(n => n.carIdx === 0);
+  // Assign each car to a team if battle is on. You = red, alternate after that.
+  const teams = state.battleMode ? allCars.map((_, i) => i % 2 === 0 ? 'red' : 'blue') : null;
+  const battle = teams ? { red: 0, blue: 0, teams } : null;
+  state.jam = { song, notes, yourNotes, allCars, total: yourNotes.length, manualHits: 0, isPractice, battle };
+  // 6-second preroll on the play page so you can see the cars + timeline before honks start
+  state.jam.startAt = performance.now() + 6000;
+  document.getElementById('play-song-name').textContent = song.name.toUpperCase();
+  document.getElementById('play-drivers').textContent = `${allCars.length} cars`;
+  go('play');
+  runJam();
+}
+
+function joinRemoteJam(payload) { /* legacy stub — replaced by lobby flow */ }
+
+// =================================================================
+// LOBBY — synchronized jam start across all drivers
+// =================================================================
+function openLobby(song, asHost) {
+  state.lobby = {
+    songId: song.id,
+    isHost: asHost,
+    ready: new Set(),
+    hostId: asHost ? state.myId : null,
+    songObj: song,
+  };
+  if (asHost) state.lobby.ready.add(state.myId);
+  document.getElementById('lobby-song').textContent = `${song.emoji} ${song.name}`;
+  document.getElementById('lobby-status').textContent = asHost ? 'You picked it. Waiting on others to ready up…' : 'Host picked a song. Tap "Ready" when you can honk.';
+  document.getElementById('lobby-hint').textContent = asHost
+    ? 'All phones will count down together when you tap Start.'
+    : 'The host will start the jam once everyone is ready.';
+  renderLobbyReady();
+  go('lobby');
+  if (asHost && state.channel) {
+    state.channel.send({
+      type: 'broadcast',
+      event: 'lobby_open',
+      payload: { hostId: state.myId, songId: song.id, hostCar: state.car }
+    }).catch(() => {});
+  }
+}
+
+function leaveLobby() {
+  if (state.lobby?.isHost && state.channel) {
+    state.channel.send({ type: 'broadcast', event: 'lobby_close', payload: { hostId: state.myId } }).catch(() => {});
+  }
+  state.lobby = null;
+  go('home');
+}
+
+function toggleReady() {
+  if (!state.lobby) return;
+  const ready = !state.lobby.ready.has(state.myId);
+  if (ready) state.lobby.ready.add(state.myId); else state.lobby.ready.delete(state.myId);
+  renderLobbyReady();
+  if (state.channel) {
+    state.channel.send({
+      type: 'broadcast', event: 'lobby_ready',
+      payload: { driverId: state.myId, ready, car: state.car, hostId: state.lobby.hostId }
+    }).catch(() => {});
+  }
+  // Auto-mark fake drivers as ready after a short delay (for demo)
+  if (ready) {
+    [...state.drivers.values()].filter(d => d.fake).forEach((d, i) => {
+      setTimeout(() => {
+        if (!state.lobby) return;
+        state.lobby.ready.add(d.id);
+        renderLobbyReady();
+      }, 800 + i * 600);
+    });
+  }
+}
+
+function renderLobbyReady() {
+  if (!state.lobby) return;
+  const list = document.getElementById('lobby-list');
+  list.innerHTML = '';
+
+  // YOU first
+  const meR = state.lobby.ready.has(state.myId);
+  const meHost = state.lobby.isHost;
+  list.appendChild(buildLobbyRow(state.car ? carSVG(state.car, 26) : '🚗', meHost ? 'YOU (host)' : 'YOU', meR, meHost));
+
+  // Then other drivers
+  state.drivers.forEach(d => {
+    const r = state.lobby.ready.has(d.id);
+    const isHost = state.lobby.hostId === d.id;
+    list.appendChild(buildLobbyRow(carSVG(d.car, 26), (isHost ? '👑 ' : '') + (d.car.make ? d.car.make + ' ' + d.car.model : d.car.model), r, isHost));
+  });
+
+  const total = 1 + state.drivers.size;
+  const readyCount = state.lobby.ready.size;
+  document.getElementById('lobby-status').textContent = `${readyCount} of ${total} ready`;
+
+  const readyBtn = document.getElementById('lobby-ready');
+  readyBtn.textContent = meR ? '✅ You are ready (tap to undo)' : 'I\'m ready — tap';
+  readyBtn.classList.toggle('ghost', meR);
+
+  const startBtn = document.getElementById('lobby-start');
+  if (state.lobby.isHost) {
+    startBtn.style.display = 'block';
+    const allReady = readyCount === total;
+    startBtn.textContent = allReady ? '🚀 Everyone ready — START!' : `⏰ Start anyway (${readyCount}/${total})`;
+    startBtn.disabled = !meR; // host must be ready themselves
+    startBtn.style.opacity = meR ? '1' : '0.5';
+  } else {
+    startBtn.style.display = 'none';
+  }
+}
+
+function buildLobbyRow(icon, name, ready, isHost) {
+  const row = document.createElement('div');
+  row.className = 'lobby-row';
+  row.innerHTML = `<span class="car-emoji">${icon}</span><span class="name">${name}</span>${isHost ? '<span class="ready-badge host">HOST</span>' : ''}<span class="ready-badge ${ready ? 'ready' : ''}">${ready ? '✅ Ready' : '⏳ Waiting'}</span>`;
+  return row;
+}
+
+function lobbyHostStart() {
+  if (!state.lobby || !state.lobby.isHost) return;
+  // 6-second sync window so all phones have time to start
+  const startAt = Date.now() + 6000;
+  if (state.channel) {
+    state.channel.send({
+      type: 'broadcast', event: 'jam_start',
+      payload: { hostId: state.myId, songId: state.lobby.songId, startAt }
+    }).catch(() => {});
+  }
+  startSyncedJam(state.lobby.songObj, startAt);
+}
+
+function startSyncedJam(song, startAtDateMs) {
+  // CRITICAL: convert from Date.now() ms (broadcast over the network) to a
+  // performance.now() reference used everywhere else. Mixing these two clocks
+  // produces ~1.7 trillion-ms timestamps that break the countdown UI.
+  const msUntilStart = Math.max(500, startAtDateMs - Date.now());
+  const startAt = performance.now() + msUntilStart;
+
+  const allCars = [state.car, ...[...state.drivers.values()].map(d => d.car)];
+  const notes = assignSongNotes(song, allCars);
+  const yourNotes = notes.filter(n => n.carIdx === 0);
+  const teams = state.battleMode ? allCars.map((_, i) => i % 2 === 0 ? 'red' : 'blue') : null;
+  const battle = teams ? { red: 0, blue: 0, teams } : null;
+  state.jam = { song, notes, yourNotes, allCars, total: yourNotes.length, manualHits: 0, battle, startAt };
+  document.getElementById('play-song-name').textContent = song.name.toUpperCase();
+  document.getElementById('play-drivers').textContent = `${allCars.length} cars`;
+  go('play');
+  runJam();
+}
+
+function runSyncedCountdown(startAt) {
+  const el = document.getElementById('cdNum');
+  let lastShown = -1;
+  function tick() {
+    if (!state.jam || state.jam._syncStartAt !== startAt) return;
+    const ms = startAt - Date.now();
+    if (ms <= 0) {
+      go('play');
+      runJam();
+      return;
+    }
+    const n = Math.ceil(ms / 1000);
+    if (n !== lastShown) {
+      el.textContent = n;
+      lastShown = n;
+      playTick();
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function runCountdown() {
+  let n = 3;
+  document.getElementById('cdNum').textContent = n;
+  playTick();
+  const t = setInterval(() => {
+    n--;
+    if (n <= 0) { clearInterval(t); go('play'); runJam(); }
+    else { document.getElementById('cdNum').textContent = n; playTick(); }
+  }, 800);
+}
+
+function runJam() {
+  const BEAT_MS = 480;
+  const jam = state.jam;
+  // jam.startAt was set by caller (prepareJam or startSyncedJam) to a future timestamp
+  const nowAtCall = performance.now();
+  const PREROLL_MS = Math.max(0, jam.startAt - nowAtCall);
+  jam.prerollMs = PREROLL_MS;
+  // Show the GET READY banner immediately while we wait for startAt
+  const prerollEl = document.getElementById('preroll-banner');
+  if (prerollEl) prerollEl.style.display = PREROLL_MS > 300 ? 'block' : 'none';
+  if (state.recordNextJam) { state.jamVideoBlob = null; startJamVideo(); }
+  scheduleHonkBuzzes(jam, PREROLL_MS, BEAT_MS);
+  const totalBeats = Math.max(...jam.notes.map(n => n.beat)) + 2;
+  const durationMs = totalBeats * BEAT_MS;
+
+  const npRow = document.getElementById('np-row');
+  npRow.innerHTML = '';
+  jam.allCars.forEach((c, i) => {
+    const b = document.createElement('div');
+    b.className = 'np-car' + (i === 0 ? ' you-car' : '');
+    b.dataset.car = i;
+    b.innerHTML = `${c.icon}<div class="lbl">${i === 0 ? 'YOU' : (c.make ? c.make.toUpperCase() : c.model.toUpperCase())}</div>`;
+    npRow.appendChild(b);
+  });
+
+  const tl = document.getElementById('timeline');
+  tl.querySelectorAll('.timeline-marker').forEach(n => n.remove());
+  jam.notes.forEach((n, i) => {
+    const m = document.createElement('div');
+    const isYou = n.carIdx === 0;
+    const car = jam.allCars[n.carIdx];
+    m.className = 'timeline-marker' + (isYou ? ' you' : '');
+    m.style.left = ((n.beat / totalBeats) * 100) + '%';
+    m.textContent = car.icon;
+    m.dataset.idx = i;
+    m.title = isYou ? 'You honk here' : (car.make + ' ' + car.model);
+    tl.appendChild(m);
+  });
+
+  const cursor = document.getElementById('cursor');
+  const honkBtn = document.getElementById('honk-btn');
+
+  // Schedule (all delays shifted by PREROLL_MS so beat 0 plays after pre-roll)
+  jam.notes.forEach((n, i) => {
+    const at = n.beat * BEAT_MS + PREROLL_MS;
+    const car = jam.allCars[n.carIdx];
+    setTimeout(() => {
+      if (state.jam !== jam) return;
+      const isYou = n.carIdx === 0;
+      // In real multi-driver mode, "you" notes wait for the user's tap (don't auto-play)
+      // In practice mode (or for visualization), we play everything
+      if (!isYou || jam.isPractice) {
+        playHornAtPitch(car, n.semi, 0.4);
+        // In battle mode, auto-scored non-you cars contribute to their team
+        if (jam.battle) {
+          const team = jam.battle.teams[n.carIdx];
+          jam.battle[team]++;
+        }
+      }
+      const bubble = npRow.querySelector(`.np-car[data-car="${n.carIdx}"]`);
+      if (bubble) {
+        bubble.classList.add('live');
+        setTimeout(() => bubble.classList.remove('live'), 350);
+      }
+      const marker = tl.querySelector(`.timeline-marker[data-idx="${i}"]`);
+      if (marker) {
+        marker.classList.add('active');
+        setTimeout(() => marker.classList.remove('active'), 250);
+        setTimeout(() => marker?.classList.add('played'), 400);
+      }
+    }, at);
+  });
+
+  // Cursor + next-cue loop
+  let lastPrerollSec = -1;
+  const tick = setInterval(() => {
+    if (state.jam !== jam) { clearInterval(tick); return; }
+    const elapsed = performance.now() - jam.startAt; // negative during pre-roll
+    cursor.style.left = Math.min(100, Math.max(0, (elapsed / durationMs) * 100)) + '%';
+
+    if (elapsed < 0) {
+      // Pre-roll: show big countdown banner
+      const secs = Math.ceil(-elapsed / 1000);
+      if (secs !== lastPrerollSec) {
+        const num = document.getElementById('preroll-num');
+        if (num) num.textContent = secs;
+        lastPrerollSec = secs;
+        playTick();
+      }
+      const firstYour = jam.yourNotes[0];
+      if (firstYour) {
+        const ms = firstYour.beat * BEAT_MS - elapsed;
+        document.getElementById('next-time').textContent = (ms / 1000).toFixed(1) + 's';
+      }
+    } else {
+      // Song is now playing — hide pre-roll banner
+      const pre = document.getElementById('preroll-banner');
+      if (pre && pre.style.display !== 'none') pre.style.display = 'none';
+      const nextYour = jam.yourNotes.find(n => n.beat * BEAT_MS > elapsed - 100);
+      if (nextYour) {
+        const ms = nextYour.beat * BEAT_MS - elapsed;
+        document.getElementById('next-time').textContent = ms > 0 ? (ms / 1000).toFixed(1) + 's' : 'NOW';
+        if (ms < 250 && ms > -250) honkBtn.classList.add('ready'); else honkBtn.classList.remove('ready');
+      } else { document.getElementById('next-time').textContent = '—'; honkBtn.classList.remove('ready'); }
+    }
+    if (elapsed >= durationMs) { clearInterval(tick); setTimeout(endJam, 600); }
+  }, 50);
+  jam._tick = tick;
+}
+
+function manualHonk() {
+  if (!state.car) return;
+  const inReal = state.mode === 'real';
+  if (!state.jam) {
+    if (!inReal) playHorn(state.car, 0.4);
+    return;
+  }
+  const next = state.jam.yourNotes.find(n => !n._hit && n.beat * 480 > (performance.now() - state.jam.startAt) - 500);
+  if (!inReal) {
+    if (next) playHornAtPitch(state.car, next.semi, 0.4);
+    else playHorn(state.car, 0.4);
+  }
+  const elapsed = performance.now() - state.jam.startAt;
+  const tolerance = 350;
+  const hit = state.jam.yourNotes.find(n => !n._hit && Math.abs(n.beat * 480 - elapsed) < tolerance);
+  if (hit) {
+    hit._hit = true;
+    state.jam.manualHits++;
+    if (state.jam.battle) state.jam.battle[state.jam.battle.teams[0]]++;
+    if (navigator.vibrate) navigator.vibrate(40);
+  }
+}
+
+// Tap anywhere on the play screen to honk (easier in-car than aiming at the button)
+function onPlayTap(ev) {
+  // Don't trigger if they're tapping a button (back, stop, honk btn itself)
+  if (ev.target.closest('button')) return;
+  manualHonk();
+}
+
+// Vibrate at the moment of each of YOUR notes so you feel when to honk
+function scheduleHonkBuzzes(jam, PREROLL_MS, BEAT_MS) {
+  if (!navigator.vibrate) return;
+  jam.yourNotes.forEach(n => {
+    const at = n.beat * BEAT_MS + PREROLL_MS;
+    setTimeout(() => {
+      if (state.jam !== jam) return;
+      navigator.vibrate([20, 30, 80]);
+    }, at - 50); // buzz just before so you can react
+  });
+}
+
+function stopJam() {
+  if (state.jam?._tick) clearInterval(state.jam._tick);
+  stopJamVideo();
+  state.jam = null;
+  go('home');
+}
+
+function endJam() {
+  const jam = state.jam;
+  if (!jam) return;
+  document.getElementById('end-hits').textContent = jam.manualHits;
+  document.getElementById('end-total').textContent = jam.total;
+  // save stats
+  state.stats.jams++;
+  state.stats.hits += jam.manualHits;
+  state.stats.cues += jam.total;
+  state.stats.songs[jam.song.id] = (state.stats.songs[jam.song.id] || 0) + 1;
+  localStorage.setItem('hj_stats', JSON.stringify(state.stats));
+  // Stop video recording; let MediaRecorder flush before navigating
+  const wasRecording = state.jamRecorder && state.jamRecorder.state === 'recording';
+  stopJamVideo();
+  // Render battle result if applicable
+  const battleEl = document.getElementById('battle-result');
+  if (battleEl) {
+    if (jam.battle) {
+      const r = jam.battle.red, b = jam.battle.blue;
+      const winner = r > b ? '🔴 Red wins!' : b > r ? '🔵 Blue wins!' : 'Tied!';
+      battleEl.innerHTML = `<div style="font-size:22px;font-weight:700;margin-top:8px">${winner}</div>
+        <div style="display:flex;justify-content:center;gap:16px;margin-top:6px">
+          <span style="color:#ff4d6d;font-weight:700">🔴 ${r}</span>
+          <span style="color:#3b82f6;font-weight:700">🔵 ${b}</span>
+        </div>`;
+    } else battleEl.innerHTML = '';
+  }
+  state.jam = null;
+  if (wasRecording) {
+    // Give the recorder a moment to finalize, then go to share screen
+    setTimeout(() => { go(state.jamVideoBlob ? 'share' : 'end'); if (state.jamVideoBlob) renderSharePreview(); }, 350);
+  } else { go('end'); }
+}
+
+function renderSharePreview() {
+  const v = document.getElementById('share-video');
+  if (state.jamVideoBlob) {
+    if (v.src) URL.revokeObjectURL(v.src);
+    v.src = URL.createObjectURL(state.jamVideoBlob);
+  }
+}
+function updateStatsUI() {
+  document.getElementById('stat-jams').textContent = state.stats.jams;
+  const acc = state.stats.cues ? Math.round(100 * state.stats.hits / state.stats.cues) : 0;
+  document.getElementById('stat-acc').textContent = acc + '%';
+  document.getElementById('stat-songs').textContent = Object.keys(state.stats.songs).length;
+}
+
+// =================================================================
+// AUDIO SYNTHESIS — horn-like, with style per car
+// =================================================================
+function ensureAC() {
+  if (!state.ac) state.ac = new (window.AudioContext || window.webkitAudioContext)();
+  if (state.ac.state === 'suspended') state.ac.resume();
+  return state.ac;
+}
+// Master bus — every horn sound routes through here. Lets us also capture
+// the audio for video recording.
+function getMasterBus() {
+  const ac = ensureAC();
+  if (!state.masterBus) {
+    state.masterBus = ac.createGain();
+    state.masterBus.gain.value = 1.0;
+    state.masterBus.connect(ac.destination);
+  }
+  return state.masterBus;
+}
+function getRecordingAudioStream() {
+  const ac = ensureAC();
+  if (!state.recDest) {
+    state.recDest = ac.createMediaStreamDestination();
+    getMasterBus().connect(state.recDest);
+  }
+  return state.recDest.stream;
+}
+
+function playHorn(car, dur = 0.4) {
+  playHornFreqs(car, car.freq[0], car.freq[1], dur);
+}
+function playHornAtPitch(car, semiOffset, dur = 0.4) {
+  // Transpose the car's natural horn pair to play the target pitch.
+  // We keep the car's interval (ratio between low and high) intact.
+  const ratio = car.freq[1] / Math.max(1, car.freq[0]);
+  const baseLow = 261.6; // C4
+  const targetLow = baseLow * Math.pow(2, semiOffset/12) * (car.freq[0] / 400); // bias by car's character
+  // Clamp into a sensible range
+  const lo = Math.max(80, Math.min(900, targetLow));
+  const hi = Math.max(lo, Math.min(1400, lo * ratio));
+  playHornFreqs(car, lo, hi, dur);
+}
+
+function playHornFreqs(car, lo, hi, dur) {
+  const ac = ensureAC();
+  const now = ac.currentTime;
+  const style = car.style || 'classic';
+
+  // Master gain envelope — attack/release shape varies by style
+  const master = ac.createGain();
+  master.gain.setValueAtTime(0.0001, now);
+  const attack = style === 'sharp' ? 0.005 : style === 'smooth' ? 0.04 : style === 'air' ? 0.08 : 0.012;
+  const peakGain = style === 'air' ? 0.55 : style === 'sharp' ? 0.5 : 0.45;
+  master.gain.exponentialRampToValueAtTime(peakGain, now + attack);
+  master.gain.setValueAtTime(peakGain, now + dur * 0.7);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  master.connect(getMasterBus());
+
+  const oscType = style === 'sharp' ? 'sawtooth' : style === 'smooth' ? 'triangle' : style === 'air' ? 'sawtooth' : 'sawtooth';
+  const secondaryType = style === 'smooth' ? 'sine' : 'square';
+
+  [lo, hi].forEach((f, idx) => {
+    if (idx === 1 && lo === hi) return; // single-tone horns (Tesla Model 3)
+    const detuneAmt = style === 'sharp' ? 8 : style === 'smooth' ? 2 : 5;
+
+    const o1 = ac.createOscillator(); o1.type = oscType; o1.frequency.value = f;
+    const g1 = ac.createGain(); g1.gain.value = 0.42;
+    o1.connect(g1); g1.connect(master); o1.start(now); o1.stop(now + dur + 0.05);
+
+    const o2 = ac.createOscillator(); o2.type = secondaryType; o2.frequency.value = f * 1.005; o2.detune.value = detuneAmt;
+    const g2 = ac.createGain(); g2.gain.value = style === 'smooth' ? 0.12 : 0.22;
+    o2.connect(g2); g2.connect(master); o2.start(now); o2.stop(now + dur + 0.05);
+
+    // Harmonic for body
+    const o3 = ac.createOscillator(); o3.type = 'sine'; o3.frequency.value = f * 2;
+    const g3 = ac.createGain(); g3.gain.value = 0.08;
+    o3.connect(g3); g3.connect(master); o3.start(now); o3.stop(now + dur + 0.05);
+
+    // Air-horn buzz
+    if (style === 'air') {
+      const o4 = ac.createOscillator(); o4.type = 'square'; o4.frequency.value = f * 0.5;
+      const g4 = ac.createGain(); g4.gain.value = 0.18;
+      o4.connect(g4); g4.connect(master); o4.start(now); o4.stop(now + dur + 0.05);
+    }
+  });
+
+  // Tiny noise burst at attack for realism
+  if (style !== 'smooth') {
+    const bufSize = ac.sampleRate * 0.04;
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random()*2-1) * (1 - i/bufSize);
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const ng = ac.createGain(); ng.gain.value = style === 'air' ? 0.18 : 0.08;
+    src.connect(ng); ng.connect(master); src.start(now);
+  }
+}
+
+function playTick() {
+  const ac = ensureAC();
+  const now = ac.currentTime;
+  const o = ac.createOscillator(); o.frequency.value = 880;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(0.3, now + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+  o.connect(g); g.connect(getMasterBus()); o.start(now); o.stop(now + 0.12);
+}
+
+// =================================================================
+// VIDEO RECORDING — capture jam as TikTok-ready vertical video
+// =================================================================
+function startJamVideo() {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 720; canvas.height = 1280;
+    state.jamCanvas = canvas;
+    state.jamCtx = canvas.getContext('2d');
+    const videoStream = canvas.captureStream(30);
+    const audioStream = getRecordingAudioStream();
+    const combined = new MediaStream([
+      ...videoStream.getVideoTracks(),
+      ...audioStream.getAudioTracks()
+    ]);
+    state.jamChunks = [];
+    const mimeOptions = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+    let mime = '';
+    for (const m of mimeOptions) { if (MediaRecorder.isTypeSupported(m)) { mime = m; break; } }
+    state.jamRecorder = new MediaRecorder(combined, mime ? { mimeType: mime } : {});
+    state.jamRecorder.ondataavailable = e => { if (e.data.size > 0) state.jamChunks.push(e.data); };
+    state.jamRecorder.onstop = () => {
+      const blob = new Blob(state.jamChunks, { type: state.jamRecorder.mimeType || 'video/webm' });
+      state.jamVideoBlob = blob;
+    };
+    state.jamRecorder.start();
+    drawJamLoop();
+    return true;
+  } catch (e) { console.warn('video record fail', e); return false; }
+}
+function stopJamVideo() {
+  if (state.jamRecorder && state.jamRecorder.state === 'recording') state.jamRecorder.stop();
+  if (state.jamDrawRAF) cancelAnimationFrame(state.jamDrawRAF);
+  state.jamDrawRAF = null;
+}
+function drawJamLoop() {
+  if (!state.jam || !state.jamCtx) return;
+  drawJamFrame();
+  state.jamDrawRAF = requestAnimationFrame(drawJamLoop);
+}
+function drawJamFrame() {
+  const ctx = state.jamCtx, W = 720, H = 1280, jam = state.jam;
+  const elapsed = performance.now() - jam.startAt;
+  const totalBeats = Math.max(...jam.notes.map(n => n.beat)) + 2;
+  const durationMs = totalBeats * 480;
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#1a1f3a'); grad.addColorStop(1, '#0a0e1a');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffb800';
+  ctx.font = 'bold 32px sans-serif';
+  ctx.fillText('🎺 HONKESTRA', W/2, 80);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 44px sans-serif';
+  const title = jam.song.emoji + '  ' + jam.song.name;
+  ctx.fillText(title, W/2, 180);
+
+  // Cars row
+  const carCount = jam.allCars.length;
+  const spacing = Math.min(180, (W - 80) / carCount);
+  const startX = W/2 - (carCount - 1) * spacing / 2;
+  jam.allCars.forEach((c, i) => {
+    const x = startX + i * spacing;
+    const y = 360;
+    const recent = jam.notes.find(n => n.carIdx === i && Math.abs(n.beat * 480 - elapsed) < 220);
+    if (recent) {
+      ctx.fillStyle = i === 0 ? '#ffb800' : '#2dd55b';
+      ctx.beginPath(); ctx.arc(x, y, 78, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.arc(x, y, 68, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.font = '70px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText(c.icon, x, y + 24);
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillStyle = i === 0 ? '#ffb800' : '#b8c0d0';
+    const label = i === 0 ? 'YOU' : (c.make || c.model).substr(0, 10);
+    ctx.fillText(label, x, y + 100);
+  });
+
+  // Big timeline
+  const tlY = 700, tlX = 60, tlW = W - 120, tlH = 80;
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(tlX, tlY, tlW, tlH);
+  jam.notes.forEach(n => {
+    const x = tlX + (n.beat / totalBeats) * tlW;
+    const y = tlY + tlH / 2;
+    const isYou = n.carIdx === 0;
+    ctx.fillStyle = isYou ? '#ffb800' : 'rgba(255,255,255,0.4)';
+    ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(tlX + (elapsed / durationMs) * tlW, tlY - 8, 3, tlH + 16);
+
+  // Score / your honks
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 56px sans-serif';
+  ctx.fillText(`${jam.manualHits} / ${jam.total}`, W/2, 920);
+  ctx.fillStyle = '#8d96aa';
+  ctx.font = '24px sans-serif';
+  ctx.fillText('your honks', W/2, 960);
+
+  // Battle scores if applicable
+  if (jam.battle) {
+    ctx.fillStyle = '#ff4d6d';
+    ctx.font = 'bold 40px sans-serif';
+    ctx.fillText(`🔴 ${jam.battle.red}`, W/2 - 120, 1060);
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillText(`🔵 ${jam.battle.blue}`, W/2 + 120, 1060);
+  }
+
+  // Footer
+  ctx.fillStyle = '#6b7589';
+  ctx.font = '28px sans-serif';
+  ctx.fillText('cheskelsbreuer-bit.github.io/honkestra', W/2, H - 60);
+}
+
+async function shareJamVideo() {
+  if (!state.jamVideoBlob) return;
+  const ext = (state.jamVideoBlob.type.includes('mp4')) ? 'mp4' : 'webm';
+  const file = new File([state.jamVideoBlob], `honkestra-jam.${ext}`, { type: state.jamVideoBlob.type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'My Honkestra jam', text: 'Played with horns on cheskelsbreuer-bit.github.io/honkestra 🎺' }); return; }
+    catch(e) { /* fall through to download */ }
+  }
+  downloadJamVideo();
+}
+function downloadJamVideo() {
+  if (!state.jamVideoBlob) return;
+  const ext = (state.jamVideoBlob.type.includes('mp4')) ? 'mp4' : 'webm';
+  const url = URL.createObjectURL(state.jamVideoBlob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `honkestra-jam.${ext}`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// =================================================================
+// RECORD YOUR REAL HORN
+// =================================================================
+state.recorder = null;
+state.recordedChunks = [];
+state.recordedBlob = null;
+state.recordedBuffer = null;
+state.recordedBase = 400; // assumed fundamental Hz of the recording (re-detected after record)
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } });
+    state.recordedChunks = [];
+    state.recorder = new MediaRecorder(stream);
+    state.recorder.ondataavailable = e => { if (e.data.size > 0) state.recordedChunks.push(e.data); };
+    state.recorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(state.recordedChunks, { type: state.recorder.mimeType || 'audio/webm' });
+      state.recordedBlob = blob;
+      const buf = await blob.arrayBuffer();
+      try {
+        const decoded = await ensureAC().decodeAudioData(buf.slice(0));
+        state.recordedBuffer = decoded;
+        document.getElementById('rec-status').textContent = `Got ${decoded.duration.toFixed(2)}s of audio. Preview or save.`;
+        document.getElementById('rec-preview').style.display = 'block';
+        document.getElementById('rec-save').style.display = 'block';
+        document.getElementById('rec-emoji').textContent = '✅';
+      } catch (e) {
+        document.getElementById('rec-status').textContent = 'Could not decode audio. Try again.';
+      }
+    };
+    state.recorder.start();
+    document.getElementById('rec-emoji').textContent = '🔴';
+    document.getElementById('rec-status').textContent = 'Recording… HONK NOW! Tap stop when done.';
+    const btn = document.getElementById('rec-start');
+    btn.textContent = '⏹ Stop recording';
+    btn.onclick = stopRecording;
+    // Auto-stop after 3 seconds as safety
+    setTimeout(() => { if (state.recorder && state.recorder.state === 'recording') stopRecording(); }, 3000);
+  } catch (e) {
+    document.getElementById('rec-status').textContent = 'Microphone blocked. Allow mic access in your browser settings.';
+  }
+}
+function stopRecording() {
+  if (state.recorder && state.recorder.state === 'recording') state.recorder.stop();
+  const btn = document.getElementById('rec-start');
+  btn.textContent = '🔴 Record again';
+  btn.onclick = startRecording;
+}
+function previewRecording() {
+  if (!state.recordedBuffer) return;
+  const ac = ensureAC();
+  const src = ac.createBufferSource();
+  src.buffer = state.recordedBuffer;
+  src.connect(ac.destination);
+  src.start();
+}
+async function saveRecording() {
+  if (!state.recordedBlob) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    localStorage.setItem('hj_horn_b64', reader.result);
+    localStorage.setItem('hj_horn_type', state.recordedBlob.type);
+    document.getElementById('rec-status').textContent = '✅ Saved! Your real horn will play during songs.';
+    document.getElementById('rec-clear').style.display = 'block';
+    document.getElementById('rec-btn-label') && (document.getElementById('rec-btn-label').textContent = 'Re-record real horn ✅');
+  };
+  reader.readAsDataURL(state.recordedBlob);
+}
+function clearRecording() {
+  localStorage.removeItem('hj_horn_b64');
+  localStorage.removeItem('hj_horn_type');
+  state.recordedBuffer = null;
+  state.recordedBlob = null;
+  document.getElementById('rec-status').textContent = 'Cleared. Using synthesized horn again.';
+  document.getElementById('rec-clear').style.display = 'none';
+  document.getElementById('rec-save').style.display = 'none';
+  document.getElementById('rec-preview').style.display = 'none';
+  document.getElementById('rec-emoji').textContent = '🎤';
+  const lbl = document.getElementById('rec-btn-label');
+  if (lbl) lbl.textContent = 'Record your real horn';
+}
+async function loadSavedRecording() {
+  const b64 = localStorage.getItem('hj_horn_b64');
+  if (!b64) return;
+  try {
+    const res = await fetch(b64);
+    const buf = await res.arrayBuffer();
+    state.recordedBuffer = await ensureAC().decodeAudioData(buf);
+    const lbl = document.getElementById('rec-btn-label');
+    if (lbl) lbl.textContent = 'Re-record real horn ✅';
+  } catch (e) { console.warn('load horn fail', e); }
+}
+
+// Play the recorded horn pitched to match the target semitone
+function playRecordedAtSemi(semiOffset, dur = 0.4) {
+  if (!state.recordedBuffer) return false;
+  const ac = ensureAC();
+  const src = ac.createBufferSource();
+  src.buffer = state.recordedBuffer;
+  // playbackRate shift: 2^(semitone/12). We assume recording is "neutral" (=0 semitones)
+  src.playbackRate.value = Math.pow(2, semiOffset / 12);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.9, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+  src.connect(g); g.connect(getMasterBus());
+  src.start();
+  src.stop(ac.currentTime + dur + 0.05);
+  return true;
+}
+
+// Wrap playHornAtPitch to prefer the recorded horn when present and it's YOUR car
+const _origPlayHornAtPitch = playHornAtPitch;
+playHornAtPitch = function(car, semiOffset, dur = 0.4) {
+  if (state.recordedBuffer && state.car && car && car.make === state.car.make && car.model === state.car.model) {
+    if (playRecordedAtSemi(semiOffset, dur)) return;
+  }
+  _origPlayHornAtPitch(car, semiOffset, dur);
+};
+const _origPlayHorn = playHorn;
+playHorn = function(car, dur = 0.4) {
+  if (state.recordedBuffer && state.car && car && car.make === state.car.make && car.model === state.car.model) {
+    if (playRecordedAtSemi(0, dur)) return;
+  }
+  _origPlayHorn(car, dur);
+};
+
+// First touch unlocks audio
+document.body.addEventListener('touchstart', ensureAC, { once: true });
+document.body.addEventListener('click', ensureAC, { once: true });
+
+// =================================================================
+// CUSTOM SONG CREATOR
+// =================================================================
+state.cs = { recording: false, startAt: 0, taps: [] };
+function csStart() {
+  state.cs = { recording: true, startAt: performance.now(), taps: [] };
+  document.getElementById('cs-status').textContent = 'Recording! Tap the button to the beat.';
+  document.getElementById('cs-start').style.display = 'none';
+  document.getElementById('cs-stop').style.display = 'block';
+  document.getElementById('cs-tap').disabled = false;
+  document.getElementById('cs-count').textContent = '0';
+  // Auto-stop at 60 seconds
+  state.cs.autoStop = setTimeout(csStop, 60000);
+}
+function csTap() {
+  if (!state.cs.recording) return;
+  const beat = (performance.now() - state.cs.startAt) / 480;
+  state.cs.taps.push(beat);
+  document.getElementById('cs-count').textContent = state.cs.taps.length;
+  playHorn(state.car || CARS_DB[0], 0.2);
+}
+function csStop() {
+  state.cs.recording = false;
+  if (state.cs.autoStop) clearTimeout(state.cs.autoStop);
+  document.getElementById('cs-tap').disabled = true;
+  document.getElementById('cs-stop').style.display = 'none';
+  document.getElementById('cs-start').style.display = 'block';
+  document.getElementById('cs-start').textContent = '🔴 Record again';
+  if (state.cs.taps.length >= 3) {
+    document.getElementById('cs-status').textContent = `Got ${state.cs.taps.length} honks. Preview or save.`;
+    document.getElementById('cs-preview').style.display = 'block';
+    document.getElementById('cs-save').style.display = 'block';
+  } else {
+    document.getElementById('cs-status').textContent = 'Need at least 3 honks. Try again.';
+  }
+}
+function csNotesFromTaps(taps) {
+  // Spread pitches up & down the C major scale based on tap density
+  const scale = [0, 2, 4, 5, 7, 9, 11, 12]; // C major
+  return taps.map((beat, i) => [beat, scale[i % scale.length]]);
+}
+function csPreview() {
+  const song = { id:'preview', name:'Preview', emoji:'✏️', diff:'easy', notes: csNotesFromTaps(state.cs.taps) };
+  // Quick playback through user's car
+  const car = state.car || CARS_DB[0];
+  song.notes.forEach(([beat, semi]) => {
+    setTimeout(() => playHornAtPitch(car, semi, 0.3), beat * 480);
+  });
+}
+function csSave() {
+  const nameInp = document.getElementById('custom-name');
+  const name = nameInp.value.trim() || ('My Song ' + Date.now().toString(36).slice(-4));
+  const song = {
+    id: 'custom_' + Date.now().toString(36),
+    name: name,
+    emoji: '✏️',
+    diff: state.cs.taps.length < 12 ? 'easy' : state.cs.taps.length < 24 ? 'med' : 'hard',
+    notes: csNotesFromTaps(state.cs.taps),
+    custom: true,
+  };
+  const saved = JSON.parse(localStorage.getItem('hj_custom') || '[]');
+  saved.push(song);
+  localStorage.setItem('hj_custom', JSON.stringify(saved));
+  // Inject into SONGS array so it shows in pickers immediately
+  SONGS.push(song);
+  document.getElementById('cs-status').textContent = `✅ "${name}" saved! Open Start-a-jam to play it.`;
+  document.getElementById('cs-save').style.display = 'none';
+  renderCustomList();
+  nameInp.value = '';
+  state.cs.taps = [];
+  document.getElementById('cs-count').textContent = '0';
+}
+function loadCustomSongs() {
+  const saved = JSON.parse(localStorage.getItem('hj_custom') || '[]');
+  saved.forEach(s => SONGS.push(s));
+  renderCustomList();
+}
+function renderCustomList() {
+  const el = document.getElementById('cs-list');
+  if (!el) return;
+  const saved = JSON.parse(localStorage.getItem('hj_custom') || '[]');
+  if (!saved.length) { el.innerHTML = '<p style="font-size:13px;color:#8d96aa">No custom songs yet.</p>'; return; }
+  el.innerHTML = saved.map((s, i) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+      <div><strong>${s.emoji} ${s.name}</strong><br><span style="font-size:12px;color:#8d96aa">${s.notes.length} honks</span></div>
+      <button class="btn small ghost danger" onclick="deleteCustom(${i})">🗑️</button>
+    </div>`
+  ).join('');
+}
+function deleteCustom(idx) {
+  const saved = JSON.parse(localStorage.getItem('hj_custom') || '[]');
+  const removed = saved.splice(idx, 1)[0];
+  localStorage.setItem('hj_custom', JSON.stringify(saved));
+  const sIdx = SONGS.findIndex(s => s.id === removed.id);
+  if (sIdx >= 0) SONGS.splice(sIdx, 1);
+  renderCustomList();
+}
+
+// =================================================================
+// EVENT / CONVOY MODE
+// =================================================================
+function createEvent() {
+  const name = (document.getElementById('event-name').value || 'Event').trim();
+  const code = String.fromCharCode(...Array(4).fill(0).map(() => 65 + Math.floor(Math.random() * 26)));
+  state.eventCode = code;
+  state.eventName = name;
+  document.getElementById('event-code-display').textContent = code;
+  document.getElementById('event-name-display').textContent = name;
+  document.getElementById('event-card').style.display = 'block';
+  // Subscribe to that event's channel to count joiners
+  setupEventHostChannel(code, name);
+}
+async function setupEventHostChannel(code, name) {
+  const ch = sb.channel('honkestra:event:' + code, { config: { presence: { key: state.myId } } });
+  ch.on('presence', { event: 'sync' }, () => {
+    const all = ch.presenceState();
+    const count = Object.keys(all).length;
+    document.getElementById('event-joined').textContent = count;
+  });
+  await ch.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') ch.track({ host: true, name, car: state.car || null });
+  });
+  state.eventChannel = ch;
+}
+function shareEventCode() {
+  const code = state.eventCode, name = state.eventName;
+  const text = `Join my Honkestra jam: "${name}". Open cheskelsbreuer-bit.github.io/honkestra → Friend code → ${code}`;
+  if (navigator.share) navigator.share({ title: 'Honkestra event', text });
+  else { navigator.clipboard?.writeText(text); alert('Copied invite text to clipboard!'); }
+}
+function useEventCode() {
+  // Switch the home room to this code so the host can also play
+  state.room = 'code'; state.code = state.eventCode;
+  go('home');
+  setTimeout(() => {
+    document.querySelector('.room-tab[data-room="code"]')?.click();
+    const inp = document.getElementById('code-in');
+    if (inp) { inp.value = state.eventCode; inp.dispatchEvent(new Event('input')); }
+  }, 100);
+}
+
+// =================================================================
+// MODE (Game / Real World), DRIVER NAME, TEMPO, SEARCH
+// =================================================================
+state.mode = localStorage.getItem('hj_mode') || 'game'; // 'game' | 'real'
+state.driverName = localStorage.getItem('hj_name') || '';
+state.songSearch = '';
+
+function setMode(m) {
+  state.mode = m;
+  localStorage.setItem('hj_mode', m);
+  document.querySelectorAll('.room-tab[data-mode]').forEach(t => t.classList.toggle('selected', t.dataset.mode === m));
+  const hint = document.getElementById('mode-hint');
+  if (hint) hint.textContent = m === 'real'
+    ? '🛣️ Phone stays SILENT — you honk with your real car horn. Camera records the action.'
+    : '🎮 Phone plays the horns. Perfect for practice and demos.';
+  const recLbl = document.getElementById('record-toggle-label');
+  const recSub = document.getElementById('record-toggle-sub');
+  if (recLbl && recSub) {
+    if (m === 'real') { recLbl.textContent = '📹 Record video (camera + mic)'; recSub.textContent = 'Captures real honking from outside'; }
+    else { recLbl.textContent = '📹 Record jam as video'; recSub.textContent = 'Screen + horn audio'; }
+  }
+}
+
+function saveDriverName() {
+  const inp = document.getElementById('driver-name-input');
+  if (inp && inp.value.trim()) {
+    state.driverName = inp.value.trim().slice(0, 14);
+    localStorage.setItem('hj_name', state.driverName);
+  }
+}
+function loadDriverName() {
+  const inp = document.getElementById('driver-name-input');
+  if (inp) inp.value = state.driverName;
+}
+
+// Final runJam — drives the play screen. Uses the song's own tempo (480 ms/beat).
+runJam = function() {
+  const BEAT_MS = 480;
+  const jam = state.jam;
+  const nowAtCall = performance.now();
+  const PREROLL_MS = Math.max(0, jam.startAt - nowAtCall);
+  jam.prerollMs = PREROLL_MS;
+  const prerollEl = document.getElementById('preroll-banner');
+  if (prerollEl) prerollEl.style.display = PREROLL_MS > 300 ? 'block' : 'none';
+  if (state.recordNextJam) { state.jamVideoBlob = null; (state.mode === 'real' ? startCameraVideo() : startJamVideo()); }
+  scheduleHonkBuzzes(jam, PREROLL_MS, BEAT_MS);
+
+  const totalBeats = Math.max(...jam.notes.map(n => n.beat)) + 2;
+  const durationMs = totalBeats * BEAT_MS;
+  const allCars = jam.allCars;
+
+  const npRow = document.getElementById('np-row');
+  npRow.innerHTML = '';
+  allCars.forEach((c, i) => {
+    const b = document.createElement('div');
+    b.className = 'np-car' + (i === 0 ? ' you-car' : '');
+    b.dataset.car = i;
+    const label = i === 0 ? (state.driverName ? state.driverName.toUpperCase() : 'YOU') : (c.make ? c.make.toUpperCase() : c.model.toUpperCase());
+    b.innerHTML = `${carSVG(c, 24)}<div class="lbl">${label}</div>`;
+    npRow.appendChild(b);
+  });
+
+  const tl = document.getElementById('timeline');
+  tl.querySelectorAll('.timeline-marker').forEach(n => n.remove());
+  jam.notes.forEach((n, i) => {
+    const m = document.createElement('div');
+    const isYou = n.carIdx === 0;
+    const car = allCars[n.carIdx];
+    m.className = 'timeline-marker' + (isYou ? ' you' : '');
+    m.style.left = ((n.beat / totalBeats) * 100) + '%';
+    m.textContent = car.icon;
+    m.dataset.idx = i;
+    m.title = isYou ? 'You honk here' : (car.make + ' ' + car.model);
+    tl.appendChild(m);
+  });
+
+  const cursor = document.getElementById('cursor');
+  const honkBtn = document.getElementById('honk-btn');
+
+  jam.notes.forEach((n, i) => {
+    const at = n.beat * BEAT_MS + PREROLL_MS;
+    const car = allCars[n.carIdx];
+    setTimeout(() => {
+      if (state.jam !== jam) return;
+      const isYou = n.carIdx === 0;
+      // In Real World mode: don't play any audio at all (you honk your real car)
+      if (state.mode !== 'real' && (!isYou || jam.isPractice)) {
+        playHornAtPitch(car, n.semi, 0.4);
+        if (jam.battle) { const team = jam.battle.teams[n.carIdx]; jam.battle[team]++; }
+      }
+      const bubble = npRow.querySelector(`.np-car[data-car="${n.carIdx}"]`);
+      if (bubble) { bubble.classList.add('live'); setTimeout(() => bubble.classList.remove('live'), 350); }
+      const marker = tl.querySelector(`.timeline-marker[data-idx="${i}"]`);
+      if (marker) { marker.classList.add('active'); setTimeout(() => marker.classList.remove('active'), 250); setTimeout(() => marker?.classList.add('played'), 400); }
+    }, at);
+  });
+
+  let lastPrerollSec = -1;
+  const tick = setInterval(() => {
+    if (state.jam !== jam) { clearInterval(tick); return; }
+    const elapsed = performance.now() - jam.startAt;
+    cursor.style.left = Math.min(100, Math.max(0, (elapsed / durationMs) * 100)) + '%';
+    if (elapsed < 0) {
+      const secs = Math.ceil(-elapsed / 1000);
+      if (secs !== lastPrerollSec) {
+        const num = document.getElementById('preroll-num');
+        if (num) num.textContent = secs;
+        lastPrerollSec = secs;
+        playTick();
+      }
+      const firstYour = jam.yourNotes[0];
+      if (firstYour) document.getElementById('next-time').textContent = ((firstYour.beat * BEAT_MS - elapsed) / 1000).toFixed(1) + 's';
+    } else {
+      const pre = document.getElementById('preroll-banner');
+      if (pre && pre.style.display !== 'none') pre.style.display = 'none';
+      const nextYour = jam.yourNotes.find(n => n.beat * BEAT_MS > elapsed - 100);
+      if (nextYour) {
+        const ms = nextYour.beat * BEAT_MS - elapsed;
+        document.getElementById('next-time').textContent = ms > 0 ? (ms / 1000).toFixed(1) + 's' : 'NOW';
+        if (ms < 250 && ms > -250) honkBtn.classList.add('ready'); else honkBtn.classList.remove('ready');
+      } else { document.getElementById('next-time').textContent = '—'; honkBtn.classList.remove('ready'); }
+    }
+    if (elapsed >= durationMs) { clearInterval(tick); setTimeout(endJam, 600); }
+  }, 50);
+  jam._tick = tick;
+};
+
+// =================================================================
+// CAMERA RECORDING (Real World mode)
+// =================================================================
+async function startCameraVideo() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } },
+      audio: true
+    });
+    state.cameraStream = stream;
+    // Show a small live preview in the corner of the play screen
+    const prev = document.getElementById('camera-preview');
+    if (prev) { prev.srcObject = stream; prev.style.display = 'block'; }
+    state.jamChunks = [];
+    const mimeOptions = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+    let mime = ''; for (const m of mimeOptions) { if (MediaRecorder.isTypeSupported(m)) { mime = m; break; } }
+    state.jamRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    state.jamRecorder.ondataavailable = e => { if (e.data.size > 0) state.jamChunks.push(e.data); };
+    state.jamRecorder.onstop = () => {
+      const blob = new Blob(state.jamChunks, { type: state.jamRecorder.mimeType || 'video/webm' });
+      state.jamVideoBlob = blob;
+      stream.getTracks().forEach(t => t.stop());
+      const prev = document.getElementById('camera-preview');
+      if (prev) { prev.srcObject = null; prev.style.display = 'none'; }
+    };
+    state.jamRecorder.start();
+    return true;
+  } catch (e) { console.warn('camera fail', e); alert('Camera blocked — allow camera/mic to record.'); return false; }
+}
+
+// On load: apply saved mode, name, and patch search into renderSongs
+setMode(state.mode);
+loadDriverName();
+
+state.songCat = state.songCat || 'all';
+const SONG_CATS = [
+  { id:'all',       label:'All',          emoji:'🎵' },
+  { id:'nursery',   label:'Nursery',      emoji:'👶' },
+  { id:'classic',   label:'Classics',     emoji:'⭐' },
+  { id:'pop',       label:'Pop/Rock',     emoji:'🎸' },
+  { id:'classical', label:'Classical',    emoji:'🎼' },
+  { id:'movie',     label:'Movie/TV',     emoji:'🎬' },
+  { id:'holiday',   label:'Holiday',      emoji:'🎄' },
+  { id:'wedding',   label:'Wedding',      emoji:'💍' },
+  { id:'stadium',   label:'Stadium',      emoji:'🏟️' },
+  { id:'beat',      label:'Beats',        emoji:'🥁' },
+  { id:'folk',      label:'Folk',         emoji:'🌎' },
+  { id:'patriotic', label:'Patriotic',    emoji:'🇺🇸' },
+];
+function renderCatTabs() {
+  const tabs = document.getElementById('song-cat-tabs');
+  if (!tabs) return;
+  tabs.innerHTML = '';
+  SONG_CATS.forEach(cat => {
+    const el = document.createElement('div');
+    el.className = 'make-tab' + (state.songCat === cat.id ? ' selected' : '');
+    el.textContent = `${cat.emoji} ${cat.label}`;
+    el.onclick = () => { state.songCat = cat.id; renderSongs(); };
+    tabs.appendChild(el);
+  });
+}
+const _origRenderSongs = renderSongs;
+renderSongs = function() {
+  renderCatTabs();
+  _origRenderSongs();
+  const inp = document.getElementById('song-search');
+  const q = inp ? inp.value.trim().toLowerCase() : '';
+  // Apply both search + category filters
+  document.querySelectorAll('#song-list .song-row').forEach(row => {
+    const text = row.textContent.toLowerCase();
+    const songName = (row.querySelector('.song-name')?.textContent || '').toLowerCase();
+    const matchesSearch = !q || text.includes(q);
+    // Match by song name found in the row to the songs list
+    let matchesCat = state.songCat === 'all';
+    if (!matchesCat) {
+      const songMatch = SONGS.find(s => songName.includes(s.name.toLowerCase()));
+      if (songMatch) matchesCat = songCat(songMatch) === state.songCat;
+    }
+    row.style.display = (matchesSearch && matchesCat) ? '' : 'none';
+  });
+};
+
+// Service worker for proper PWA install (cache the page so it works offline-ish)
+if ('serviceWorker' in navigator) {
+  try { navigator.serviceWorker.register('sw.js').catch(()=>{}); } catch(e){}
+}
+
+// On load: restore car + saved horn recording + custom songs
+loadCar();
+setTimeout(loadSavedRecording, 200);
+setTimeout(loadCustomSongs, 250);
+</script>
+</body>
+</html>
