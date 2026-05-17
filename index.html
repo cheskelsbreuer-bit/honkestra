@@ -319,6 +319,10 @@
     <div class="play-area">
       <div class="now-playing" id="np-row"></div>
 
+      <div id="preroll-banner" style="display:none;background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a;padding:14px 20px;border-radius:14px;font-weight:800;font-size:18px;text-align:center;box-shadow:0 0 30px rgba(255,184,0,0.4);width:100%">
+        🎺 GET READY! Song starts in <span id="preroll-num" style="font-size:32px;display:inline-block;min-width:30px;vertical-align:middle">3</span>
+      </div>
+
       <div class="next-cue">
         Your next honk in
         <span class="time" id="next-time">—</span>
@@ -1427,8 +1431,13 @@ function runCountdown() {
 
 function runJam() {
   const BEAT_MS = 480;
+  const PREROLL_MS = 3500; // 3.5 sec of "GET READY" pre-roll before first note plays
   const jam = state.jam;
-  jam.startAt = performance.now();
+  jam.startAt = performance.now() + PREROLL_MS; // beat 0 is shifted into the future
+  jam.prerollMs = PREROLL_MS;
+  // Show the GET READY banner immediately
+  const prerollEl = document.getElementById('preroll-banner');
+  if (prerollEl) prerollEl.style.display = 'flex';
   if (state.recordNextJam) { state.jamVideoBlob = null; startJamVideo(); }
   const totalBeats = Math.max(...jam.notes.map(n => n.beat)) + 2;
   const durationMs = totalBeats * BEAT_MS;
@@ -1460,9 +1469,9 @@ function runJam() {
   const cursor = document.getElementById('cursor');
   const honkBtn = document.getElementById('honk-btn');
 
-  // Schedule
+  // Schedule (all delays shifted by PREROLL_MS so beat 0 plays after pre-roll)
   jam.notes.forEach((n, i) => {
-    const at = n.beat * BEAT_MS;
+    const at = n.beat * BEAT_MS + PREROLL_MS;
     const car = jam.allCars[n.carIdx];
     setTimeout(() => {
       if (state.jam !== jam) return;
@@ -1492,16 +1501,37 @@ function runJam() {
   });
 
   // Cursor + next-cue loop
+  let lastPrerollSec = -1;
   const tick = setInterval(() => {
     if (state.jam !== jam) { clearInterval(tick); return; }
-    const elapsed = performance.now() - jam.startAt;
-    cursor.style.left = Math.min(100, (elapsed / durationMs) * 100) + '%';
-    const nextYour = jam.yourNotes.find(n => n.beat * BEAT_MS > elapsed - 100);
-    if (nextYour) {
-      const ms = nextYour.beat * BEAT_MS - elapsed;
-      document.getElementById('next-time').textContent = ms > 0 ? (ms / 1000).toFixed(1) + 's' : 'NOW';
-      if (ms < 250 && ms > -250) honkBtn.classList.add('ready'); else honkBtn.classList.remove('ready');
-    } else { document.getElementById('next-time').textContent = '—'; honkBtn.classList.remove('ready'); }
+    const elapsed = performance.now() - jam.startAt; // negative during pre-roll
+    cursor.style.left = Math.min(100, Math.max(0, (elapsed / durationMs) * 100)) + '%';
+
+    if (elapsed < 0) {
+      // Pre-roll: show big countdown banner
+      const secs = Math.ceil(-elapsed / 1000);
+      if (secs !== lastPrerollSec) {
+        const num = document.getElementById('preroll-num');
+        if (num) num.textContent = secs;
+        lastPrerollSec = secs;
+        playTick();
+      }
+      const firstYour = jam.yourNotes[0];
+      if (firstYour) {
+        const ms = firstYour.beat * BEAT_MS - elapsed;
+        document.getElementById('next-time').textContent = (ms / 1000).toFixed(1) + 's';
+      }
+    } else {
+      // Song is now playing — hide pre-roll banner
+      const pre = document.getElementById('preroll-banner');
+      if (pre && pre.style.display !== 'none') pre.style.display = 'none';
+      const nextYour = jam.yourNotes.find(n => n.beat * BEAT_MS > elapsed - 100);
+      if (nextYour) {
+        const ms = nextYour.beat * BEAT_MS - elapsed;
+        document.getElementById('next-time').textContent = ms > 0 ? (ms / 1000).toFixed(1) + 's' : 'NOW';
+        if (ms < 250 && ms > -250) honkBtn.classList.add('ready'); else honkBtn.classList.remove('ready');
+      } else { document.getElementById('next-time').textContent = '—'; honkBtn.classList.remove('ready'); }
+    }
     if (elapsed >= durationMs) { clearInterval(tick); setTimeout(endJam, 600); }
   }, 50);
   jam._tick = tick;
