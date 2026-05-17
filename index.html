@@ -255,13 +255,6 @@
     <h2 style="margin-top:8px">Pick a song</h2>
     <p style="margin-bottom:12px"><span id="jam-count">3</span> cars are jamming.</p>
     <input id="song-search" placeholder="🔎 Search songs (e.g. birthday, bond, twinkle)…" oninput="renderSongs()" style="width:100%;font-size:15px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px">
-    <div style="background:rgba(255,255,255,0.05);padding:10px 14px;border-radius:12px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px">
-        <span>🎚️ Tempo</span>
-        <span id="tempo-label" style="color:#ffb800">Normal (1.0×)</span>
-      </div>
-      <input type="range" id="tempo-slider" min="50" max="150" step="10" value="100" oninput="setTempo(this.value)" style="width:100%;accent-color:#ffb800">
-    </div>
     <div class="toggle-bar" style="padding:10px 14px;margin-bottom:8px">
       <div>
         <div style="font-weight:700;font-size:14px" id="record-toggle-label">📹 Record jam as video</div>
@@ -1409,8 +1402,13 @@ function lobbyHostStart() {
   startSyncedJam(state.lobby.songObj, startAt);
 }
 
-function startSyncedJam(song, startAt) {
-  // Build jam with the synchronized start time
+function startSyncedJam(song, startAtDateMs) {
+  // CRITICAL: convert from Date.now() ms (broadcast over the network) to a
+  // performance.now() reference used everywhere else. Mixing these two clocks
+  // produces ~1.7 trillion-ms timestamps that break the countdown UI.
+  const msUntilStart = Math.max(500, startAtDateMs - Date.now());
+  const startAt = performance.now() + msUntilStart;
+
   const allCars = [state.car, ...[...state.drivers.values()].map(d => d.car)];
   const notes = assignSongNotes(song, allCars);
   const yourNotes = notes.filter(n => n.carIdx === 0);
@@ -1568,10 +1566,16 @@ function runJam() {
 
 function manualHonk() {
   if (!state.car) return;
-  if (!state.jam) { playHorn(state.car, 0.4); return; }
+  const inReal = state.mode === 'real';
+  if (!state.jam) {
+    if (!inReal) playHorn(state.car, 0.4);
+    return;
+  }
   const next = state.jam.yourNotes.find(n => !n._hit && n.beat * 480 > (performance.now() - state.jam.startAt) - 500);
-  if (next) playHornAtPitch(state.car, next.semi, 0.4);
-  else playHorn(state.car, 0.4);
+  if (!inReal) {
+    if (next) playHornAtPitch(state.car, next.semi, 0.4);
+    else playHorn(state.car, 0.4);
+  }
   const elapsed = performance.now() - state.jam.startAt;
   const tolerance = 350;
   const hit = state.jam.yourNotes.find(n => !n._hit && Math.abs(n.beat * 480 - elapsed) < tolerance);
@@ -2183,7 +2187,6 @@ function useEventCode() {
 // =================================================================
 state.mode = localStorage.getItem('hj_mode') || 'game'; // 'game' | 'real'
 state.driverName = localStorage.getItem('hj_name') || '';
-state.tempoMult = parseFloat(localStorage.getItem('hj_tempo') || '1.0');
 state.songSearch = '';
 
 function setMode(m) {
@@ -2214,34 +2217,9 @@ function loadDriverName() {
   if (inp) inp.value = state.driverName;
 }
 
-function setTempo(v) {
-  state.tempoMult = (+v) / 100;
-  localStorage.setItem('hj_tempo', String(state.tempoMult));
-  const lbl = document.getElementById('tempo-label');
-  if (lbl) {
-    const tag = state.tempoMult < 0.85 ? 'Slow' : state.tempoMult > 1.15 ? 'Fast' : 'Normal';
-    lbl.textContent = `${tag} (${state.tempoMult.toFixed(2)}×)`;
-  }
-}
-
-// Override BEAT_MS in runJam to respect tempo
-const _origRunJam = runJam;
+// Final runJam — drives the play screen. Uses the song's own tempo (480 ms/beat).
 runJam = function() {
-  // Patch BEAT_MS via state for scheduling; affects timeline + scheduling consistently
-  // We can't easily change const BEAT_MS inside runJam, so we monkey-patch by overriding the function
-  // Instead: scale the song's beats by 1/tempoMult by adjusting BEAT_MS effect
-  // Simplest path: temporarily multiply beats in the existing schedule by tempo factor by replacing the function body
-  _origRunJam();
-};
-
-// Cleaner approach: route everything through tempoMult by adjusting BEAT_MS at the call site.
-// Add helper used by runJam scheduling. (Existing runJam uses const BEAT_MS = 480 directly.)
-// We'll monkey-patch by re-defining runJam more directly below.
-</script>
-<script>
-// Override runJam so tempo control actually affects timing.
-runJam = function() {
-  const BEAT_MS = Math.round(480 / Math.max(0.1, state.tempoMult));
+  const BEAT_MS = 480;
   const jam = state.jam;
   const nowAtCall = performance.now();
   const PREROLL_MS = Math.max(0, jam.startAt - nowAtCall);
@@ -2361,9 +2339,8 @@ async function startCameraVideo() {
   } catch (e) { console.warn('camera fail', e); alert('Camera blocked — allow camera/mic to record.'); return false; }
 }
 
-// On load: apply saved mode, name, tempo, and patch search into renderSongs
+// On load: apply saved mode, name, and patch search into renderSongs
 setMode(state.mode);
-setTempo((state.tempoMult * 100).toString());
 loadDriverName();
 
 const _origRenderSongs = renderSongs;
