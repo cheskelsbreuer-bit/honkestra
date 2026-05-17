@@ -319,8 +319,10 @@
     <div class="play-area">
       <div class="now-playing" id="np-row"></div>
 
-      <div id="preroll-banner" style="display:none;background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a;padding:14px 20px;border-radius:14px;font-weight:800;font-size:18px;text-align:center;box-shadow:0 0 30px rgba(255,184,0,0.4);width:100%">
-        🎺 GET READY! Song starts in <span id="preroll-num" style="font-size:32px;display:inline-block;min-width:30px;vertical-align:middle">3</span>
+      <div id="preroll-banner" style="display:none;background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a;padding:16px 20px;border-radius:18px;text-align:center;box-shadow:0 0 50px rgba(255,184,0,0.5);width:100%">
+        <div style="font-size:13px;letter-spacing:3px;font-weight:700;opacity:0.8">🎺 SONG STARTS IN</div>
+        <div id="preroll-num" style="font-size:84px;font-weight:900;line-height:1;margin:4px 0">6</div>
+        <div style="font-size:12px;opacity:0.8">Watch the timeline — your honks are orange</div>
       </div>
 
       <div class="next-cue">
@@ -1258,10 +1260,12 @@ function prepareJam(song, isPractice) {
   const teams = state.battleMode ? allCars.map((_, i) => i % 2 === 0 ? 'red' : 'blue') : null;
   const battle = teams ? { red: 0, blue: 0, teams } : null;
   state.jam = { song, notes, yourNotes, allCars, total: yourNotes.length, manualHits: 0, isPractice, battle };
+  // 6-second preroll on the play page so you can see the cars + timeline before honks start
+  state.jam.startAt = performance.now() + 6000;
   document.getElementById('play-song-name').textContent = song.name.toUpperCase();
   document.getElementById('play-drivers').textContent = `${allCars.length} cars`;
-  go('countdown');
-  runCountdown();
+  go('play');
+  runJam();
 }
 
 function joinRemoteJam(payload) { /* legacy stub — replaced by lobby flow */ }
@@ -1383,17 +1387,17 @@ function lobbyHostStart() {
 }
 
 function startSyncedJam(song, startAt) {
-  // Build jam (same as prepareJam) but use the synchronized start time
+  // Build jam with the synchronized start time
   const allCars = [state.car, ...[...state.drivers.values()].map(d => d.car)];
   const notes = assignSongNotes(song, allCars);
   const yourNotes = notes.filter(n => n.carIdx === 0);
   const teams = state.battleMode ? allCars.map((_, i) => i % 2 === 0 ? 'red' : 'blue') : null;
   const battle = teams ? { red: 0, blue: 0, teams } : null;
-  state.jam = { song, notes, yourNotes, allCars, total: yourNotes.length, manualHits: 0, battle, _syncStartAt: startAt };
+  state.jam = { song, notes, yourNotes, allCars, total: yourNotes.length, manualHits: 0, battle, startAt };
   document.getElementById('play-song-name').textContent = song.name.toUpperCase();
   document.getElementById('play-drivers').textContent = `${allCars.length} cars`;
-  go('countdown');
-  runSyncedCountdown(startAt);
+  go('play');
+  runJam();
 }
 
 function runSyncedCountdown(startAt) {
@@ -1431,13 +1435,14 @@ function runCountdown() {
 
 function runJam() {
   const BEAT_MS = 480;
-  const PREROLL_MS = 3500; // 3.5 sec of "GET READY" pre-roll before first note plays
   const jam = state.jam;
-  jam.startAt = performance.now() + PREROLL_MS; // beat 0 is shifted into the future
+  // jam.startAt was set by caller (prepareJam or startSyncedJam) to a future timestamp
+  const nowAtCall = performance.now();
+  const PREROLL_MS = Math.max(0, jam.startAt - nowAtCall);
   jam.prerollMs = PREROLL_MS;
-  // Show the GET READY banner immediately
+  // Show the GET READY banner immediately while we wait for startAt
   const prerollEl = document.getElementById('preroll-banner');
-  if (prerollEl) prerollEl.style.display = 'flex';
+  if (prerollEl) prerollEl.style.display = PREROLL_MS > 300 ? 'block' : 'none';
   if (state.recordNextJam) { state.jamVideoBlob = null; startJamVideo(); }
   const totalBeats = Math.max(...jam.notes.map(n => n.beat)) + 2;
   const durationMs = totalBeats * BEAT_MS;
