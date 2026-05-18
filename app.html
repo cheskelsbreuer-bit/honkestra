@@ -143,7 +143,6 @@
     <input id="driver-name-input" placeholder="Your name (optional, e.g. Chaya)" maxlength="14" style="width:100%;font-size:16px;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px;text-align:center">
     <div class="stack">
       <button class="btn" onclick="saveDriverName(); go('perms')">Get started</button>
-      <button class="btn ghost" onclick="go('practice-pick')">🎮 Practice mode (solo)</button>
       <p class="legal">Honk only when it's safe and legal. Honkestra stops itself when you're moving. You're always in control.</p>
     </div>
   </div>
@@ -242,10 +241,12 @@
     <div style="text-align:center;font-size:12px;color:#8d96aa;margin:4px 0 8px" id="song-count-hint">— songs ready —</div>
     <div class="stack">
       <button class="btn" onclick="startJam()">🎺 Start a jam</button>
+      <button class="btn ghost" onclick="surpriseMe()">🎲 Surprise me — random song now</button>
       <button class="btn ghost" onclick="broadcastJamRequest()">📣 Honk for a jam (invite everyone nearby)</button>
       <button class="btn ghost" onclick="go('event')">🎉 Create an event / convoy</button>
       <button class="btn ghost" onclick="go('create-song')">✏️ Create your own song</button>
       <button class="btn ghost" onclick="go('record')">🎤 <span id="rec-btn-label">Record your real horn</span></button>
+      <button class="btn ghost" onclick="soundTest()" style="font-size:13px;padding:10px">🔊 Sound test (check phone volume)</button>
     </div>
   </div>
 
@@ -980,7 +981,7 @@ function renderMakeGrid() {
   cars.forEach(c => {
     const el = document.createElement('div');
     el.className = 'card' + (state.car && state.car.make === c.make && state.car.model === c.model ? ' selected' : '');
-    el.innerHTML = `<div class="car-icon" style="height:38px;display:flex;align-items:center;justify-content:center">${carSVG(c, 32)}</div><div class="car-name">${c.model}</div><div class="car-horn">${c.make} · ${c.desc}</div><div class="horn-spec">${c.freq[0]}+${c.freq[1]} Hz</div>`;
+    el.innerHTML = `<div class="car-icon">${c.icon}</div><div class="car-name">${c.model}</div><div class="car-horn">${c.desc}</div><div class="horn-spec">${c.freq[0]}+${c.freq[1]} Hz</div>`;
     el.onclick = () => {
       state.pendingModel = c;
       playHorn(c, 0.55);
@@ -1025,7 +1026,7 @@ function ensureMap() {
   const lng = state.myLoc?.lng ?? -73.9855;
   state.map = L.map('map', { zoomControl: false, attributionControl: false }).setView([lat, lng], 16);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(state.map);
-  const youIcon = L.divIcon({ className: 'car-marker', html: `<div class="car-marker-inner you">${state.car ? carSVG(state.car, 22) : '🚗'}</div>`, iconSize: [40,40] });
+  const youIcon = L.divIcon({ className: 'car-marker', html: `<div class="car-marker-inner you">${state.car?.icon || '🚗'}</div>`, iconSize: [40,40] });
   state.myMarker = L.marker([lat, lng], { icon: youIcon }).addTo(state.map);
   setTimeout(() => state.map.invalidateSize(), 100);
 }
@@ -1034,7 +1035,7 @@ function renderDriverMarkers() {
   state.markers.forEach((mk, id) => { if (!state.drivers.has(id)) { mk.remove(); state.markers.delete(id); } });
   // add/update
   state.drivers.forEach(d => {
-    const html = `<div class="car-marker-inner ${d.invited ? 'invited' : 'other'}">${carSVG(d.car, 22)}</div>`;
+    const html = `<div class="car-marker-inner ${d.invited ? 'invited' : 'other'}">${d.car.icon}</div>`;
     const icon = L.divIcon({ className: 'car-marker', html, iconSize: [40,40] });
     if (state.markers.has(d.id)) {
       state.markers.get(d.id).setLatLng([d.lat, d.lng]).setIcon(icon);
@@ -1285,6 +1286,8 @@ function renderSongListInto(elId, isPractice) {
     const s = entry.s;
     const row = document.createElement('div');
     row.className = 'song-row';
+    row.dataset.songId = s.id;
+    row.dataset.songCat = songCat(s);
     const beats = Math.max(...s.notes.map(n => n[0])) + 2;
     const dur = Math.round(beats * 0.48);
     const min = Math.floor(dur/60), sec = dur % 60;
@@ -1477,13 +1480,13 @@ function renderLobbyReady() {
   // YOU first
   const meR = state.lobby.ready.has(state.myId);
   const meHost = state.lobby.isHost;
-  list.appendChild(buildLobbyRow(state.car ? carSVG(state.car, 26) : '🚗', meHost ? 'YOU (host)' : 'YOU', meR, meHost));
+  list.appendChild(buildLobbyRow(state.car?.icon || '🚗', meHost ? 'YOU (host)' : 'YOU', meR, meHost));
 
   // Then other drivers
   state.drivers.forEach(d => {
     const r = state.lobby.ready.has(d.id);
     const isHost = state.lobby.hostId === d.id;
-    list.appendChild(buildLobbyRow(carSVG(d.car, 26), (isHost ? '👑 ' : '') + (d.car.make ? d.car.make + ' ' + d.car.model : d.car.model), r, isHost));
+    list.appendChild(buildLobbyRow(d.car.icon, (isHost ? '👑 ' : '') + (d.car.make ? d.car.make + ' ' + d.car.model : d.car.model), r, isHost));
   });
 
   const total = 1 + state.drivers.size;
@@ -2364,7 +2367,7 @@ runJam = function() {
     b.className = 'np-car' + (i === 0 ? ' you-car' : '');
     b.dataset.car = i;
     const label = i === 0 ? (state.driverName ? state.driverName.toUpperCase() : 'YOU') : (c.make ? c.make.toUpperCase() : c.model.toUpperCase());
-    b.innerHTML = `${carSVG(c, 24)}<div class="lbl">${label}</div>`;
+    b.innerHTML = `${c.icon}<div class="lbl">${label}</div>`;
     npRow.appendChild(b);
   });
 
@@ -2498,26 +2501,48 @@ const _origRenderSongs = renderSongs;
 renderSongs = function() {
   renderCatTabs();
   _origRenderSongs();
+  applySongFilters();
+};
+function applySongFilters() {
   const inp = document.getElementById('song-search');
   const q = inp ? inp.value.trim().toLowerCase() : '';
-  // Apply both search + category filters
   document.querySelectorAll('#song-list .song-row').forEach(row => {
-    const text = row.textContent.toLowerCase();
-    const songName = (row.querySelector('.song-name')?.textContent || '').toLowerCase();
-    const matchesSearch = !q || text.includes(q);
-    // Match by song name found in the row to the songs list
-    let matchesCat = state.songCat === 'all';
-    if (!matchesCat) {
-      const songMatch = SONGS.find(s => songName.includes(s.name.toLowerCase()));
-      if (songMatch) matchesCat = songCat(songMatch) === state.songCat;
-    }
+    const matchesSearch = !q || row.textContent.toLowerCase().includes(q);
+    const matchesCat = state.songCat === 'all' || row.dataset.songCat === state.songCat;
     row.style.display = (matchesSearch && matchesCat) ? '' : 'none';
   });
-};
+}
 
 // Service worker for proper PWA install (cache the page so it works offline-ish)
 if ('serviceWorker' in navigator) {
   try { navigator.serviceWorker.register('sw.js').catch(()=>{}); } catch(e){}
+}
+
+// =================================================================
+// EXTRAS — surprise me, sound test
+// =================================================================
+function surpriseMe() {
+  if (!state.car) { go('car-make'); return; }
+  if (state.speedMps * 3.6 > 12) { alert('You are moving — pull over or stop first.'); return; }
+  if (state.drivers.size === 0) { while (state.drivers.size < 2) spawnFakeDriver(); }
+  const allCars = [state.car, ...[...state.drivers.values()].map(d => d.car)];
+  const scored = SONGS.map(s => ({ s, fit: songFit(s, allCars) }))
+    .filter(x => x.fit <= 4.5)
+    .sort((a,b) => a.fit - b.fit);
+  const pool = scored.length ? scored.slice(0, Math.min(15, scored.length)) : [{ s: SONGS[Math.floor(Math.random()*SONGS.length)], fit: 0 }];
+  const pick = pool[Math.floor(Math.random() * pool.length)].s;
+  openLobby(pick, true);
+}
+
+function soundTest() {
+  ensureAC();
+  const car = state.car || CARS_DB[0];
+  playHorn(car, 0.35);
+  setTimeout(() => playHornAtPitch(car, 7, 0.35), 450);
+  setTimeout(() => playHornAtPitch(car, 12, 0.5), 900);
+  // Small visual hint
+  const hint = document.getElementById('song-count-hint');
+  if (hint) { const old = hint.textContent; hint.textContent = '🔊 Played 3 test honks — heard them?'; setTimeout(() => { hint.textContent = old; }, 2500); }
 }
 
 // On load: restore car + saved horn recording + custom songs
