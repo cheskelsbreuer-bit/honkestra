@@ -217,6 +217,7 @@
       <div class="room-tab" data-room="code" onclick="setRoom('code')">🔢 Friend code</div>
     </div>
 
+    <div id="debug-strip" style="font-size:11px;color:#6b7589;text-align:center;margin-bottom:8px;font-family:ui-monospace,monospace">—</div>
     <div id="speed-warn-slot"></div>
     <div id="code-slot" style="display:none">
       <input class="code-input" id="code-in" maxlength="4" placeholder="1234" inputmode="numeric" pattern="[0-9]*">
@@ -242,7 +243,15 @@
     <div class="stack">
       <button class="btn" onclick="startJam()">🎺 Start a jam</button>
       <button class="btn ghost" onclick="surpriseMe()">🎲 Surprise me — random song now</button>
-      <button class="btn ghost" onclick="broadcastJamRequest()">📣 Honk for a jam (invite everyone nearby)</button>
+      <div style="display:flex;gap:6px">
+        <select id="invite-radius" style="background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:0 10px;font-size:13px;font-weight:600">
+          <option value="100">100 m</option>
+          <option value="200">200 m</option>
+          <option value="500" selected>500 m</option>
+          <option value="1000">1 km</option>
+        </select>
+        <button class="btn ghost" style="flex:1" onclick="broadcastJamRequest()">📣 Honk for a jam (everyone in range)</button>
+      </div>
       <button class="btn ghost" onclick="go('event')">🎉 Create an event / convoy</button>
       <button class="btn ghost" onclick="go('create-song')">✏️ Create your own song</button>
       <button class="btn ghost" onclick="go('record')">🎤 <span id="rec-btn-label">Record your real horn</span></button>
@@ -1016,9 +1025,19 @@ function onHome() {
   updateMoodUI();
   updateSpeedWarning();
   ensureChannel();
+  ensureBroadcastChannel();
   // Show how many songs work with this car (after my rebalance fix, all of them do)
   const hint = document.getElementById('song-count-hint');
   if (hint) hint.textContent = `🎵 ${SONGS.length} songs work with your ${state.car.make} ${state.car.model}`;
+  updateDebugStrip();
+}
+
+function updateDebugStrip() {
+  const el = document.getElementById('debug-strip');
+  if (!el) return;
+  const ch = state.channel?.topic?.replace('realtime:','') || '(connecting…)';
+  const bc = state.broadcastChannel ? 'on' : 'off';
+  el.innerHTML = `🛰️ Room: <code>${ch}</code> · Global: ${bc} · Drivers in room: <strong>${state.drivers.size}</strong>`;
 }
 function ensureMap() {
   if (state.map) { setTimeout(() => state.map.invalidateSize(), 50); return; }
@@ -1048,6 +1067,7 @@ function renderDriverMarkers() {
   document.getElementById('status-text').textContent = state.inMood
     ? `${state.drivers.size} driver${state.drivers.size === 1 ? '' : 's'} nearby`
     : `Quiet mode (${state.drivers.size} nearby)`;
+  updateDebugStrip();
 }
 function updateMoodUI() {
   document.getElementById('mood-switch').classList.toggle('on', state.inMood);
@@ -1070,13 +1090,28 @@ function updateSpeedWarning() {
 // =================================================================
 function setRoom(r) {
   state.room = r;
-  document.querySelectorAll('.room-tab').forEach(t => t.classList.toggle('selected', t.dataset.room === r));
+  document.querySelectorAll('.room-tab[data-room]').forEach(t => t.classList.toggle('selected', t.dataset.room === r));
   document.getElementById('code-slot').style.display = r === 'code' ? 'block' : 'none';
   if (r === 'code') {
     const inp = document.getElementById('code-in');
-    inp.oninput = () => { state.code = inp.value.replace(/\D/g,'').slice(0,4); inp.value = state.code; ensureChannel(); };
+    // Allow letters too — broadcast invites generate letter codes (e.g. WEDA)
+    inp.oninput = () => {
+      const cleaned = inp.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,4);
+      inp.value = cleaned;
+      if (cleaned.length === 4 && cleaned !== state.code) {
+        state.code = cleaned;
+        ensureChannel();
+      } else if (cleaned.length < 4 && state.code.length === 4) {
+        // User cleared the code — drop back to geo channel
+        state.code = cleaned;
+        ensureChannel();
+      } else {
+        state.code = cleaned;
+      }
+    };
   }
-  ensureChannel();
+  // Only re-subscribe when switching to a fully-formed channel
+  if (r === 'nearby' || (r === 'code' && state.code.length === 4)) ensureChannel();
 }
 
 // =================================================================
@@ -1117,10 +1152,14 @@ async function ensureChannel() {
     Object.entries(all).forEach(([id, metas]) => {
       if (id === state.myId) return;
       const m = metas[0];
-      if (!m || !m.car || !m.lat) return;
-      state.drivers.set(id, { id, lat: m.lat, lng: m.lng, car: m.car });
+      if (!m || !m.car) return; // require car only — lat is optional (some phones don't share GPS)
+      state.drivers.set(id, { id, lat: m.lat || 0, lng: m.lng || 0, car: m.car });
     });
     renderDriverMarkers();
+  });
+  ch.on('presence', { event: 'join' }, () => {
+    // Someone joined — re-track ourselves so they definitely see us
+    broadcastMe();
   });
   ch.on('broadcast', { event: 'invite' }, ({ payload }) => {
     if (payload.to === state.myId) showInvite(payload);
@@ -1138,14 +1177,19 @@ async function ensureChannel() {
   ch.on('broadcast', { event: 'lobby_open' }, ({ payload }) => {
     if (payload.hostId === state.myId) return;
     const song = SONGS.find(s => s.id === payload.songId);
-    if (!song) return;
-    if (!state.inMood) return;
-    state.lobby = { songId: song.id, isHost: false, ready: new Set([payload.hostId]), hostId: payload.hostId, songObj: song };
-    document.getElementById('lobby-song').textContent = `${song.emoji} ${song.name}`;
+    if (!song) {
+      // Custom song the host made — accept it on the fly
+      if (payload.songObj) SONGS.push(payload.songObj);
+      else return;
+    }
+    const useSong = song || SONGS.find(s => s.id === payload.songId);
+    if (!useSong) return;
+    state.lobby = { songId: useSong.id, isHost: false, ready: new Set([payload.hostId]), hostId: payload.hostId, songObj: useSong };
+    document.getElementById('lobby-song').textContent = `${useSong.emoji} ${useSong.name}`;
     document.getElementById('lobby-hint').textContent = 'The host will start the jam once everyone is ready.';
     renderLobbyReady();
     go('lobby');
-    if (Notification.permission === 'granted') new Notification('🎺 Jam starting!', { body: `Host picked: ${song.name}. Tap to join.` });
+    if (Notification.permission === 'granted') new Notification('🎺 Jam starting!', { body: `Host picked: ${useSong.name}. Tap to join.` });
   });
   ch.on('broadcast', { event: 'lobby_ready' }, ({ payload }) => {
     if (!state.lobby) return;
@@ -1179,43 +1223,93 @@ function broadcastMe() {
   state.channel.track({ car: state.car, lat, lng, ts: Date.now() }).catch(() => {});
 }
 
+// Global broadcast channel — every phone subscribes to this so "Honk for a jam"
+// can reach phones in different GPS buckets / no GPS / friend-code rooms.
+async function ensureBroadcastChannel() {
+  if (state.broadcastChannel) return state.broadcastChannel;
+  const ch = sb.channel('honkestra:global');
+  ch.on('broadcast', { event: 'jam_request' }, ({ payload }) => {
+    if (payload.from === state.myId) return;
+    if (!state.inMood) return;
+    // Distance filter — only show if we're within the sender's chosen radius
+    if (payload.loc && state.myLoc) {
+      const m = distM(state.myLoc, payload.loc);
+      if (m > (payload.radius || 500)) return;
+    }
+    showInvite({ from: payload.from, fromCar: payload.fromCar, code: payload.code, dist: (payload.loc && state.myLoc) ? Math.round(distM(state.myLoc, payload.loc)) : null });
+    if (Notification.permission === 'granted') {
+      new Notification('🎺 Want to jam?', { body: `A ${payload.fromCar?.model || 'driver'} nearby wants to play a song.` });
+    }
+  });
+  await ch.subscribe();
+  state.broadcastChannel = ch;
+  return ch;
+}
+
 let _lastBroadcastAt = 0;
 async function broadcastJamRequest() {
   if (!state.car) { go('car-make'); return; }
-  if (!state.channel) await ensureChannel();
   const now = Date.now();
   if (now - _lastBroadcastAt < 30000) {
     alert("You just sent one — wait 30 sec before broadcasting again so you don't spam drivers.");
     return;
   }
   _lastBroadcastAt = now;
-  await state.channel.send({
+  const radius = parseInt(document.getElementById('invite-radius')?.value || '500', 10);
+  // Auto-generate a room code so anyone who joins lands in the same room as us
+  const code = String.fromCharCode(...Array(4).fill(0).map(() => 65 + Math.floor(Math.random() * 26)));
+  state.room = 'code';
+  state.code = code;
+  // Move our UI to the code tab so we host this room
+  document.querySelectorAll('.room-tab[data-room]').forEach(t => t.classList.toggle('selected', t.dataset.room === 'code'));
+  const codeSlot = document.getElementById('code-slot');
+  if (codeSlot) codeSlot.style.display = 'block';
+  const codeIn = document.getElementById('code-in');
+  if (codeIn) codeIn.value = code;
+  await ensureChannel();
+  await ensureBroadcastChannel();
+  await state.broadcastChannel.send({
     type: 'broadcast',
     event: 'jam_request',
-    payload: { from: state.myId, fromCar: state.car, loc: state.myLoc, ts: now }
+    payload: { from: state.myId, fromCar: state.car, loc: state.myLoc, radius, code, ts: now }
   });
   // Visual confirmation
   const slot = document.getElementById('invite-slot');
-  const prev = slot.innerHTML;
-  slot.innerHTML = `<div class="invite-banner" style="background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a"><div style="font-weight:700">📣 Honk sent to drivers nearby!</div></div>`;
-  setTimeout(() => { if (slot.innerHTML.includes('Honk sent')) slot.innerHTML = prev; }, 4000);
+  slot.innerHTML = `<div class="invite-banner" style="background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a"><div><div style="font-weight:700">📣 Sent! Anyone within ${radius}m can join.</div><div style="font-size:13px;margin-top:2px">Room code: <strong style="letter-spacing:3px">${code}</strong></div></div></div>`;
+  setTimeout(() => { if (slot.innerHTML.includes('Sent!')) slot.innerHTML = ''; }, 8000);
 }
 
-function showInvite({ from, fromCar, songId }) {
+function acceptInvite(code, btn) {
+  // Switch to the host's code room so we share the lobby
+  state.room = 'code';
+  state.code = code;
+  document.querySelectorAll('.room-tab[data-room]').forEach(t => t.classList.toggle('selected', t.dataset.room === 'code'));
+  const codeSlot = document.getElementById('code-slot');
+  if (codeSlot) codeSlot.style.display = 'block';
+  const codeIn = document.getElementById('code-in');
+  if (codeIn) codeIn.value = code;
+  ensureChannel();
+  document.getElementById('invite-slot').innerHTML = `<div class="invite-banner"><div style="font-weight:700">✅ Joined room ${code} — waiting for host to start a song</div></div>`;
+}
+
+function showInvite({ from, fromCar, code, dist }) {
   const slot = document.getElementById('invite-slot');
   const car = fromCar || { icon:'🚗', model:'Driver' };
+  const distStr = dist != null ? ` · ${dist}m away` : '';
+  const joinBtn = code
+    ? `<button class="btn small" onclick="acceptInvite('${code}', this)">Join (${code})</button>`
+    : `<button class="btn small" onclick="startJam()">Join</button>`;
   slot.innerHTML = `
     <div class="invite-banner">
       <div>
         <div style="font-weight:700">${car.icon} ${car.make || ''} ${car.model} wants to jam</div>
-        <div style="font-size:13px;opacity:.9">Tap join to play together</div>
+        <div style="font-size:13px;opacity:.9">Tap Join to enter the same room${distStr}</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn ghost small" onclick="document.getElementById('invite-slot').innerHTML=''">Skip</button>
-        <button class="btn small" onclick="startJam()">Join</button>
+        ${joinBtn}
       </div>
     </div>`;
-  if (Notification.permission === 'granted') new Notification('🚗 Want to jam?', { body: `${car.model} driver nearby wants to play horns.` });
 }
 
 // =================================================================
