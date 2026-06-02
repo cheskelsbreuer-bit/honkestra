@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "honkestra",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5071"],
+      "port": 5071
+    }
+  ]
+}

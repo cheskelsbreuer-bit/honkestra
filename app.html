@@ -232,6 +232,12 @@
       <div class="switch on" id="mood-switch" onclick="toggleMood()"></div>
     </div>
 
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:12px;color:#8d96aa;font-weight:700">📣 YOUR VIBE <span style="color:#6b7589;font-weight:400">(others see this)</span></div>
+      <div style="font-size:12px;color:#2dd55b;font-weight:700">🟢 <span id="online-count">1</span> honking now</div>
+    </div>
+    <div class="make-tabs" id="vibe-chips" style="margin-bottom:12px;flex-shrink:0;min-height:40px"></div>
+
     <div id="invite-slot"></div>
 
     <div style="position:relative;flex:1;min-height:260px;margin-bottom:12px">
@@ -239,19 +245,24 @@
       <button onclick="recenterMap()" style="position:absolute;right:10px;bottom:10px;z-index:500;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)">📍</button>
     </div>
 
+    <div id="honker-list"></div>
+
     <div style="text-align:center;font-size:12px;color:#8d96aa;margin:4px 0 8px" id="song-count-hint">— songs ready —</div>
     <div class="stack">
       <button class="btn" onclick="startJam()">🎺 Start a jam</button>
       <button class="btn ghost" onclick="surpriseMe()">🎲 Surprise me — random song now</button>
-      <div style="display:flex;gap:6px">
-        <select id="invite-radius" style="background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:0 10px;font-size:13px;font-weight:600">
-          <option value="100">100 m</option>
-          <option value="200">200 m</option>
-          <option value="500" selected>500 m</option>
-          <option value="1000">1 km</option>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:12px;color:#8d96aa;white-space:nowrap">within</span>
+        <select id="invite-radius" style="background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 8px;font-size:13px;font-weight:600">
+          <option value="100">100 ft</option>
+          <option value="300">300 ft</option>
+          <option value="500" selected>500 ft</option>
+          <option value="1000">1000 ft</option>
+          <option value="99999">Anyone nearby</option>
         </select>
-        <button class="btn ghost" style="flex:1" onclick="broadcastJamRequest()">📣 Honk for a jam (everyone in range)</button>
+        <button class="btn ghost" style="flex:1" onclick="broadcastJamRequest()">📣 Invite everyone nearby</button>
       </div>
+      <button class="btn ghost" onclick="shareMyHonk()">🔗 Share my code — "Let's go horn!"</button>
       <button class="btn ghost" onclick="go('event')">🎉 Create an event / convoy</button>
       <button class="btn ghost" onclick="go('create-song')">✏️ Create your own song</button>
       <button class="btn ghost" onclick="go('record')">🎤 <span id="rec-btn-label">Record your real horn</span></button>
@@ -1021,15 +1032,45 @@ function onHome() {
   loadCar();
   document.getElementById('my-car-name').textContent = state.car ? state.car.model : 'Pick car';
   if (!state.car) { go('car-make'); return; }
+  // Apply a shared ?code= deep link now that we have a car
+  if (state._deepLinkCode) {
+    const code = state._deepLinkCode; state._deepLinkCode = null;
+    state.room = 'code'; state.code = code;
+    document.querySelectorAll('.room-tab[data-room]').forEach(t => t.classList.toggle('selected', t.dataset.room === 'code'));
+    const cs = document.getElementById('code-slot'); if (cs) cs.style.display = 'block';
+    const ci = document.getElementById('code-in'); if (ci) ci.value = code;
+    const slot = document.getElementById('invite-slot');
+    if (slot) slot.innerHTML = `<div class="invite-banner"><div style="font-weight:700">✅ Joined room ${code} — waiting for the host to start a song 🎺</div></div>`;
+  }
   ensureMap();
   updateMoodUI();
   updateSpeedWarning();
   ensureChannel();
   ensureBroadcastChannel();
+  startHeartbeat();
+  // Landing on home means any previous jam/lobby is over — clear the flags so the
+  // next lobby_open / jam_start broadcast is accepted (lobby_open navigates to the
+  // lobby screen directly, so this never clobbers an in-progress flow).
+  state.jam = null;
+  state.jamStarted = false;
+  state.lobby = null;
+  renderHonkerList();
+  renderVibeChips();
+  updateOnlineCount();
   // Show how many songs work with this car (after my rebalance fix, all of them do)
   const hint = document.getElementById('song-count-hint');
   if (hint) hint.textContent = `🎵 ${SONGS.length} songs work with your ${state.car.make} ${state.car.model}`;
   updateDebugStrip();
+}
+
+// Re-announce ourselves every few seconds so late-joining phones always see us,
+// and so a host's open lobby keeps reaching new arrivals. Cheap + reliable.
+function startHeartbeat() {
+  if (state._hb) return;
+  state._hb = setInterval(() => {
+    broadcastMe();
+    if (state.broadcastChannel) state.broadcastChannel.track({ online: true, ts: Date.now() }).catch(()=>{});
+  }, 4000);
 }
 
 function updateDebugStrip() {
@@ -1067,6 +1108,7 @@ function renderDriverMarkers() {
   document.getElementById('status-text').textContent = state.inMood
     ? `${state.drivers.size} driver${state.drivers.size === 1 ? '' : 's'} nearby`
     : `Quiet mode (${state.drivers.size} nearby)`;
+  renderHonkerList();
   updateDebugStrip();
 }
 function updateMoodUI() {
@@ -1153,9 +1195,11 @@ async function ensureChannel() {
       if (id === state.myId) return;
       const m = metas[0];
       if (!m || !m.car) return; // require car only — lat is optional (some phones don't share GPS)
-      state.drivers.set(id, { id, lat: m.lat || 0, lng: m.lng || 0, car: m.car });
+      const prev = state.drivers.get(id);
+      state.drivers.set(id, { id, lat: m.lat || 0, lng: m.lng || 0, car: m.car, name: m.name || null, vibe: m.vibe || null, inMood: m.inMood, invited: prev?.invited });
     });
     renderDriverMarkers();
+    renderHonkerList();
   });
   ch.on('presence', { event: 'join' }, () => {
     // Someone joined — re-track ourselves so they definitely see us
@@ -1176,6 +1220,10 @@ async function ensureChannel() {
   });
   ch.on('broadcast', { event: 'lobby_open' }, ({ payload }) => {
     if (payload.hostId === state.myId) return;
+    // Idempotent: if we're already in this exact lobby, ignore the re-announce
+    // (host re-broadcasts every few seconds so late joiners always catch it).
+    if (state.lobby && state.lobby.hostId === payload.hostId && state.lobby.songId === payload.songId) return;
+    if (state.jamStarted) return;
     const song = SONGS.find(s => s.id === payload.songId);
     if (!song) {
       // Custom song the host made — accept it on the fly
@@ -1207,7 +1255,8 @@ async function ensureChannel() {
   ch.on('broadcast', { event: 'jam_start' }, ({ payload }) => {
     if (!state.lobby || payload.songId !== state.lobby.songId) return;
     if (payload.hostId === state.myId) return; // already starting
-    const song = SONGS.find(s => s.id === payload.songId);
+    if (state.jamStarted) return; // host re-broadcasts jam_start 3x — only act once
+    const song = state.lobby.songObj || SONGS.find(s => s.id === payload.songId);
     if (!song) return;
     startSyncedJam(song, payload.startAt);
   });
@@ -1217,33 +1266,126 @@ async function ensureChannel() {
   state.channel = ch;
 }
 function broadcastMe() {
-  if (!state.channel || !state.car || !state.inMood) return;
-  const lat = state.myLoc?.lat ?? 40.7580 + (Math.random()-0.5)*0.001;
-  const lng = state.myLoc?.lng ?? -73.9855 + (Math.random()-0.5)*0.001;
-  state.channel.track({ car: state.car, lat, lng, ts: Date.now() }).catch(() => {});
+  // ALWAYS track presence when we have a car + channel — even if "not in the mood".
+  // Mood only controls whether broadcast jam-pings pop up, NOT whether other
+  // drivers can see you. (Old bug: gating on inMood made you invisible.)
+  if (!state.channel || !state.car) return;
+  if (state._noGpsLat == null) { state._noGpsLat = 40.7580 + (Math.random()-0.5)*0.001; state._noGpsLng = -73.9855 + (Math.random()-0.5)*0.001; }
+  const lat = state.myLoc?.lat ?? state._noGpsLat;
+  const lng = state.myLoc?.lng ?? state._noGpsLng;
+  state.channel.track({
+    car: state.car, lat, lng, ts: Date.now(),
+    name: state.driverName || null,
+    vibe: state.vibe || null,
+    inMood: state.inMood,
+  }).catch(() => {});
 }
 
 // Global broadcast channel — every phone subscribes to this so "Honk for a jam"
 // can reach phones in different GPS buckets / no GPS / friend-code rooms.
 async function ensureBroadcastChannel() {
   if (state.broadcastChannel) return state.broadcastChannel;
-  const ch = sb.channel('honkestra:global');
+  const ch = sb.channel('honkestra:global', { config: { presence: { key: state.myId } } });
   ch.on('broadcast', { event: 'jam_request' }, ({ payload }) => {
     if (payload.from === state.myId) return;
     if (!state.inMood) return;
-    // Distance filter — only show if we're within the sender's chosen radius
+    // Distance filter FAILS OPEN — only drop the invite if BOTH sides have GPS
+    // and we're truly out of range. No GPS on either phone => always show.
     if (payload.loc && state.myLoc) {
       const m = distM(state.myLoc, payload.loc);
-      if (m > (payload.radius || 500)) return;
+      if (m > (payload.radius || 99999)) return;
     }
-    showInvite({ from: payload.from, fromCar: payload.fromCar, code: payload.code, dist: (payload.loc && state.myLoc) ? Math.round(distM(state.myLoc, payload.loc)) : null });
+    showInvite({ from: payload.from, fromCar: payload.fromCar, code: payload.code, name: payload.name, dist: (payload.loc && state.myLoc) ? Math.round(distM(state.myLoc, payload.loc)) : null });
     if (Notification.permission === 'granted') {
-      new Notification('🎺 Want to jam?', { body: `A ${payload.fromCar?.model || 'driver'} nearby wants to play a song.` });
+      new Notification('🎺 Want to jam?', { body: `${payload.name || 'A ' + (payload.fromCar?.model || 'driver')} nearby wants to play a song.` });
     }
+    if (navigator.vibrate) navigator.vibrate([100,60,100]);
   });
-  await ch.subscribe();
+  // Global presence = "honkers online right now" counter
+  ch.on('presence', { event: 'sync' }, () => {
+    state.onlineCount = Object.keys(ch.presenceState()).length;
+    updateOnlineCount();
+  });
+  await new Promise(res => {
+    let done = false;
+    ch.subscribe(st => { if (st === 'SUBSCRIBED' && !done) { done = true; ch.track({ online: true, ts: Date.now() }).catch(()=>{}); res(); } });
+    setTimeout(() => { if (!done) { done = true; res(); } }, 4000); // never hang
+  });
   state.broadcastChannel = ch;
   return ch;
+}
+function updateOnlineCount() {
+  const el = document.getElementById('online-count');
+  if (el) el.textContent = state.onlineCount || 1;
+}
+
+// =================================================================
+// VIBES — "advertise yourself" so nearby drivers know you're up for it
+// =================================================================
+const VIBES = [
+  { id:'horn',    label:"🎺 LET'S GO HORN" },
+  { id:'down',    label:'😎 Down to jam' },
+  { id:'wedding', label:'💒 Wedding convoy' },
+  { id:'tailgate',label:'🏟️ Tailgate' },
+  { id:'birthday',label:'🎂 Birthday' },
+  { id:'cruise',  label:'🌃 Cruising' },
+  { id:'battle',  label:'🥊 Honk battle?' },
+];
+function renderVibeChips() {
+  const wrap = document.getElementById('vibe-chips');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  VIBES.forEach(v => {
+    const el = document.createElement('div');
+    el.className = 'make-tab' + (state.vibe === v.label ? ' selected' : '');
+    el.textContent = v.label;
+    el.onclick = () => { setVibe(state.vibe === v.label ? null : v.label); };
+    wrap.appendChild(el);
+  });
+}
+function setVibe(label) {
+  state.vibe = label;
+  if (label) localStorage.setItem('hj_vibe', label); else localStorage.removeItem('hj_vibe');
+  renderVibeChips();
+  broadcastMe();
+}
+
+// Live list of other drivers in your room — names + vibes + cars
+function renderHonkerList() {
+  const el = document.getElementById('honker-list');
+  if (!el) return;
+  const others = [...state.drivers.values()];
+  if (!others.length) {
+    el.innerHTML = `<div style="background:rgba(255,255,255,0.04);border-radius:14px;padding:14px;text-align:center;font-size:13px;color:#8d96aa">No other honkers here yet. Hit <strong>📣 Invite everyone nearby</strong> or share your code 🎺</div>`;
+    return;
+  }
+  el.innerHTML = `<div style="font-size:12px;color:#8d96aa;font-weight:700;margin:2px 0 8px">🚗 HONKERS IN YOUR ROOM (${others.length})</div>` +
+    others.map(d => {
+      const nm = d.name || (d.car.make ? d.car.make + ' ' + d.car.model : d.car.model);
+      const vibe = d.vibe ? `<span style="font-size:11px;color:#ffb800;font-weight:700">${d.vibe}</span>` : `<span style="font-size:11px;color:#6b7589">${d.car.model}</span>`;
+      const moodDot = d.inMood === false ? '⚪' : '🟢';
+      return `<div class="lobby-row"><span class="car-emoji">${d.car.icon}</span><span class="name">${nm}<br>${vibe}</span><span style="font-size:13px">${moodDot}</span></div>`;
+    }).join('');
+}
+
+// Share / "Let's go horn!" — copies a join link with your friend code
+async function shareMyHonk() {
+  if (!state.car) { go('car-make'); return; }
+  // Make sure we have a code others can join
+  if (!(state.room === 'code' && state.code && state.code.length === 4)) {
+    const code = String.fromCharCode(...Array(4).fill(0).map(() => 65 + Math.floor(Math.random() * 26)));
+    state.room = 'code'; state.code = code;
+    document.querySelectorAll('.room-tab[data-room]').forEach(t => t.classList.toggle('selected', t.dataset.room === 'code'));
+    const cs = document.getElementById('code-slot'); if (cs) cs.style.display = 'block';
+    const ci = document.getElementById('code-in'); if (ci) ci.value = code;
+    await ensureChannel();
+  }
+  const url = location.origin + location.pathname + '?code=' + state.code;
+  const text = `🎺 Let's go HORN! Join my Honkestra room ${state.code} and let's play a song with our car horns: ${url}`;
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Honkestra', text }); }
+    else { await navigator.clipboard.writeText(text); alert('Copied! Paste it to your group 🎺\n\nRoom code: ' + state.code); }
+  } catch(e) { try { await navigator.clipboard.writeText(text); alert('Copied! Room code: ' + state.code); } catch(_){} }
 }
 
 let _lastBroadcastAt = 0;
@@ -1255,7 +1397,9 @@ async function broadcastJamRequest() {
     return;
   }
   _lastBroadcastAt = now;
-  const radius = parseInt(document.getElementById('invite-radius')?.value || '500', 10);
+  const feet = parseInt(document.getElementById('invite-radius')?.value || '500', 10);
+  const radius = feet >= 99999 ? 999999 : Math.round(feet * 0.3048); // feet → metres
+  const rangeLabel = feet >= 99999 ? 'anyone nearby' : feet + ' ft';
   // Auto-generate a room code so anyone who joins lands in the same room as us
   const code = String.fromCharCode(...Array(4).fill(0).map(() => 65 + Math.floor(Math.random() * 26)));
   state.room = 'code';
@@ -1268,15 +1412,14 @@ async function broadcastJamRequest() {
   if (codeIn) codeIn.value = code;
   await ensureChannel();
   await ensureBroadcastChannel();
-  await state.broadcastChannel.send({
-    type: 'broadcast',
-    event: 'jam_request',
-    payload: { from: state.myId, fromCar: state.car, loc: state.myLoc, radius, code, ts: now }
-  });
+  const payload = { from: state.myId, fromCar: state.car, name: state.driverName || null, loc: state.myLoc, radius, code, ts: now };
+  // Send a few times over ~3s so phones that just opened still catch it.
+  const send = () => { state.broadcastChannel?.send({ type: 'broadcast', event: 'jam_request', payload }).catch(()=>{}); };
+  send(); setTimeout(send, 800); setTimeout(send, 2200);
   // Visual confirmation
   const slot = document.getElementById('invite-slot');
-  slot.innerHTML = `<div class="invite-banner" style="background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a"><div><div style="font-weight:700">📣 Sent! Anyone within ${radius}m can join.</div><div style="font-size:13px;margin-top:2px">Room code: <strong style="letter-spacing:3px">${code}</strong></div></div></div>`;
-  setTimeout(() => { if (slot.innerHTML.includes('Sent!')) slot.innerHTML = ''; }, 8000);
+  slot.innerHTML = `<div class="invite-banner" style="background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a"><div><div style="font-weight:700">📣 Honk sent to ${rangeLabel}!</div><div style="font-size:13px;margin-top:2px">Anyone who joins lands in room <strong style="letter-spacing:3px">${code}</strong></div></div></div>`;
+  setTimeout(() => { if (slot.innerHTML.includes('Honk sent')) slot.innerHTML = ''; }, 8000);
 }
 
 function acceptInvite(code, btn) {
@@ -1292,17 +1435,18 @@ function acceptInvite(code, btn) {
   document.getElementById('invite-slot').innerHTML = `<div class="invite-banner"><div style="font-weight:700">✅ Joined room ${code} — waiting for host to start a song</div></div>`;
 }
 
-function showInvite({ from, fromCar, code, dist }) {
+function showInvite({ from, fromCar, code, dist, name }) {
   const slot = document.getElementById('invite-slot');
   const car = fromCar || { icon:'🚗', model:'Driver' };
   const distStr = dist != null ? ` · ${dist}m away` : '';
+  const who = name ? `${name} (${car.icon} ${car.model})` : `${car.icon} ${car.make || ''} ${car.model}`;
   const joinBtn = code
     ? `<button class="btn small" onclick="acceptInvite('${code}', this)">Join (${code})</button>`
     : `<button class="btn small" onclick="startJam()">Join</button>`;
   slot.innerHTML = `
     <div class="invite-banner">
       <div>
-        <div style="font-weight:700">${car.icon} ${car.make || ''} ${car.model} wants to jam</div>
+        <div style="font-weight:700">${who} wants to jam 🎺</div>
         <div style="font-size:13px;opacity:.9">Tap Join to enter the same room${distStr}</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -1497,6 +1641,7 @@ function prepareJam(song, isPractice) {
   const teams = state.battleMode ? allCars.map((_, i) => i % 2 === 0 ? 'red' : 'blue') : null;
   const battle = teams ? { red: 0, blue: 0, teams } : null;
   state.jam = { song, notes, yourNotes, allCars, total: yourNotes.length, manualHits: 0, isPractice, battle };
+  state.jamStarted = true;
   // 6-second preroll on the play page so you can see the cars + timeline before honks start
   state.jam.startAt = performance.now() + 6000;
   document.getElementById('play-song-name').textContent = song.name.toUpperCase();
@@ -1527,11 +1672,9 @@ function openLobby(song, asHost) {
   renderLobbyReady();
   go('lobby');
   if (asHost && state.channel) {
-    state.channel.send({
-      type: 'broadcast',
-      event: 'lobby_open',
-      payload: { hostId: state.myId, songId: song.id, hostCar: state.car }
-    }).catch(() => {});
+    const p = { hostId: state.myId, songId: song.id, hostCar: state.car, songObj: song.custom ? song : undefined };
+    const announce = () => { if (state.lobby?.isHost && !state.jamStarted) state.channel?.send({ type: 'broadcast', event: 'lobby_open', payload: p }).catch(() => {}); };
+    announce(); setTimeout(announce, 700); setTimeout(announce, 1600);
   }
 }
 
@@ -1614,12 +1757,9 @@ function lobbyHostStart() {
   if (!state.lobby || !state.lobby.isHost) return;
   // 6-second sync window so all phones have time to start
   const startAt = Date.now() + 6000;
-  if (state.channel) {
-    state.channel.send({
-      type: 'broadcast', event: 'jam_start',
-      payload: { hostId: state.myId, songId: state.lobby.songId, startAt }
-    }).catch(() => {});
-  }
+  const payload = { hostId: state.myId, songId: state.lobby.songId, startAt };
+  const send = () => state.channel?.send({ type: 'broadcast', event: 'jam_start', payload }).catch(() => {});
+  send(); setTimeout(send, 500); setTimeout(send, 1200); // 3x so every phone catches it
   startSyncedJam(state.lobby.songObj, startAt);
 }
 
@@ -1636,6 +1776,7 @@ function startSyncedJam(song, startAtDateMs) {
   const teams = state.battleMode ? allCars.map((_, i) => i % 2 === 0 ? 'red' : 'blue') : null;
   const battle = teams ? { red: 0, blue: 0, teams } : null;
   state.jam = { song, notes, yourNotes, allCars, total: yourNotes.length, manualHits: 0, battle, startAt };
+  state.jamStarted = true;
   document.getElementById('play-song-name').textContent = song.name.toUpperCase();
   document.getElementById('play-drivers').textContent = `${allCars.length} cars`;
   go('play');
@@ -1831,6 +1972,8 @@ function stopJam() {
   if (state.jam?._tick) clearInterval(state.jam._tick);
   stopJamVideo();
   state.jam = null;
+  state.jamStarted = false;
+  state.lobby = null;
   go('home');
 }
 
@@ -2641,8 +2784,20 @@ function soundTest() {
 
 // On load: restore car + saved horn recording + custom songs
 loadCar();
+state.vibe = localStorage.getItem('hj_vibe') || null;
 setTimeout(loadSavedRecording, 200);
 setTimeout(loadCustomSongs, 250);
+
+// Deep link: ?code=ABCD — someone shared their room. Skip straight in.
+(function handleDeepLink() {
+  const m = new URLSearchParams(location.search).get('code');
+  if (!m) return;
+  const code = m.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4);
+  if (code.length !== 4) return;
+  state.room = 'code';
+  state.code = code;
+  state._deepLinkCode = code; // applied once we reach home (after car pick)
+})();
 </script>
 </body>
 </html>
