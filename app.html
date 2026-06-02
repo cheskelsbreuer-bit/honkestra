@@ -13,167 +13,237 @@
 <title>Honkestra — Play music with cars in traffic</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a0e1a; color: #fff; user-select: none; }
-  body { display: flex; flex-direction: column; }
-  .app { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-  .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: 20px; overflow-y: auto; }
-  .screen.active { display: flex; }
-  h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.5px; }
-  h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
-  p { font-size: 15px; line-height: 1.5; color: #b8c0d0; }
-  .brand { font-size: 12px; color: #6b7589; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; font-weight: 700; }
-  .hero { font-size: 64px; line-height: 1; margin: 28px 0 20px; text-align: center; }
-  .btn { background: linear-gradient(135deg, #ffb800 0%, #ff7a00 100%); color: #1a1a1a; border: none; padding: 16px 24px; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; width: 100%; transition: transform .1s; box-shadow: 0 8px 24px rgba(255,122,0,.3); }
-  .btn:active { transform: scale(0.97); }
-  .btn.ghost { background: rgba(255,255,255,.08); color: #fff; box-shadow: none; }
-  .btn.danger { background: linear-gradient(135deg, #ff4d6d 0%, #c11e3c 100%); color: #fff; }
-  .btn.small { padding: 10px 16px; font-size: 14px; width: auto; }
-  .btn[disabled] { opacity: .4; pointer-events: none; }
-  .spacer { flex: 1; }
-  .stack { display: flex; flex-direction: column; gap: 10px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); padding: 14px; border-radius: 16px; cursor: pointer; transition: all .15s; }
-  .card:active { transform: scale(0.97); }
-  .card.selected { background: rgba(255,184,0,.15); border-color: #ffb800; }
-  .car-icon { font-size: 34px; margin-bottom: 6px; }
-  .car-name { font-weight: 700; font-size: 14px; line-height: 1.2; }
-  .car-horn { font-size: 11px; color: #8d96aa; margin-top: 4px; }
-  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 14px; }
-  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #2dd55b; box-shadow: 0 0 12px #2dd55b; }
-  .status-dot.offline { background: #6b7589; box-shadow: none; }
-  .status-dot.warn { background: #ffb800; box-shadow: 0 0 12px #ffb800; }
-  .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #b8c0d0; }
-  #map { border-radius: 20px; flex: 1; min-height: 260px; margin-bottom: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); background: #1a2138; }
-  .leaflet-container { background: #1a2138 !important; }
-  .leaflet-tile { filter: brightness(.7) saturate(.6); }
-  .car-marker { background: none; border: none; }
-  .car-marker-inner { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; transform: translate(-50%,-50%); }
-  .car-marker-inner.you { background: linear-gradient(135deg, #ffb800, #ff7a00); box-shadow: 0 0 0 4px rgba(255,184,0,.25), 0 0 24px rgba(255,184,0,.5); }
-  .car-marker-inner.other { background: rgba(255,255,255,.95); color: #1a1a1a; box-shadow: 0 4px 10px rgba(0,0,0,.4); }
-  .car-marker-inner.invited { background: linear-gradient(135deg, #2dd55b, #1ba84a); color: #fff; }
-  .toggle-bar { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,.06); padding: 14px 18px; border-radius: 16px; margin-bottom: 12px; }
-  .switch { position: relative; width: 52px; height: 30px; background: #2a3247; border-radius: 30px; cursor: pointer; transition: background .2s; flex-shrink: 0; }
-  .switch.on { background: #2dd55b; }
-  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; background: #fff; border-radius: 50%; transition: transform .2s; }
-  .switch.on::after { transform: translateX(22px); }
-  .invite-banner { background: linear-gradient(135deg, #2dd55b 0%, #1ba84a 100%); color: #fff; padding: 14px 16px; border-radius: 16px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; animation: slideIn .3s; }
-  @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  .invite-banner .btn { width: auto; padding: 8px 14px; font-size: 14px; }
-  .song-list { display: flex; flex-direction: column; gap: 8px; }
-  .song-row { background: rgba(255,255,255,.06); padding: 14px; border-radius: 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; gap: 10px; }
-  .song-row:active { background: rgba(255,255,255,.1); }
-  .song-name { font-weight: 600; font-size: 15px; }
-  .song-meta { font-size: 12px; color: #8d96aa; margin-top: 2px; }
-  .difficulty { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: .5px; margin-left: 6px; }
-  .diff-easy { background: rgba(45,213,91,.2); color: #2dd55b; }
-  .diff-med { background: rgba(255,184,0,.2); color: #ffb800; }
-  .diff-hard { background: rgba(255,77,109,.2); color: #ff4d6d; }
-  .countdown { font-size: 140px; font-weight: 900; text-align: center; line-height: 1; }
-  .play-area { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 20px; padding: 10px 0; }
-  .honk-btn { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, #ffb800 0%, #ff7a00 70%); border: none; color: #1a1a1a; font-size: 30px; font-weight: 900; cursor: pointer; box-shadow: 0 0 0 8px rgba(255,184,0,.2), 0 0 60px rgba(255,184,0,.4); transition: all .1s; letter-spacing: 2px; }
-  .honk-btn:active { transform: scale(0.95); box-shadow: 0 0 0 4px rgba(255,184,0,.3); }
-  .honk-btn.ready { animation: glow 0.4s ease-in-out infinite alternate; }
-  @keyframes glow { from { box-shadow: 0 0 0 8px rgba(255,184,0,.2), 0 0 60px rgba(255,184,0,.4); } to { box-shadow: 0 0 0 16px rgba(255,184,0,.4), 0 0 100px rgba(255,184,0,.8); } }
-  .timeline { width: 100%; height: 70px; background: rgba(255,255,255,.05); border-radius: 14px; position: relative; overflow: hidden; }
-  .timeline-track { position: absolute; top: 50%; transform: translateY(-50%); left: 0; right: 0; height: 4px; background: rgba(255,255,255,.1); }
-  .timeline-marker { position: absolute; top: 50%; transform: translate(-50%,-50%); width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(255,255,255,.12); transition: all .2s; border: 2px solid rgba(255,255,255,.2); }
-  .timeline-marker.you { background: linear-gradient(135deg, #ffb800, #ff7a00); border-color: #fff; }
-  .timeline-marker.played { opacity: .35; }
-  .timeline-marker.active { transform: translate(-50%,-50%) scale(1.6); box-shadow: 0 0 24px #ffb800; z-index: 2; }
-  .timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; transition: left .05s linear; }
-  .next-cue { text-align: center; font-size: 15px; color: #b8c0d0; }
-  .next-cue .time { font-size: 38px; font-weight: 800; color: #fff; display: block; line-height: 1.1; }
-  .now-playing { display: flex; align-items: flex-start; justify-content: center; gap: 10px; min-height: 90px; flex-wrap: wrap; }
-  .np-car { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.06); display: flex; align-items: center; justify-content: center; font-size: 26px; border: 2px solid rgba(255,255,255,.1); transition: all .15s; flex-shrink: 0; position: relative; }
-  .np-car.live { background: linear-gradient(135deg, #2dd55b, #1ba84a); border-color: #fff; transform: scale(1.15); box-shadow: 0 0 30px rgba(45,213,91,.6); }
-  .np-car.live.you-car { background: linear-gradient(135deg, #ffb800, #ff7a00); box-shadow: 0 0 30px rgba(255,184,0,.7); }
-  .np-car .lbl { position: absolute; top: 60px; font-size: 9px; color: #8d96aa; font-weight: 700; letter-spacing: .5px; white-space: nowrap; }
-  .np-car.live .lbl { color: #fff; }
-  .perm-row { background: rgba(255,255,255,.06); padding: 14px; border-radius: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; }
-  .perm-icon { font-size: 26px; }
-  .perm-text { flex: 1; }
-  .perm-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
-  .perm-text span { font-size: 12px; color: #8d96aa; }
-  .perm-status { font-size: 12px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.08); }
-  .perm-status.granted { background: rgba(45,213,91,.2); color: #2dd55b; }
-  .perm-status.denied { background: rgba(255,77,109,.2); color: #ff4d6d; }
-  .legal { font-size: 11px; color: #5a627a; text-align: center; line-height: 1.5; margin-top: 14px; }
-  .back { background: none; border: none; color: #ffb800; font-size: 15px; padding: 0; cursor: pointer; font-weight: 600; align-self: flex-start; margin-bottom: 4px; }
-  .badge { display: inline-block; background: rgba(255,184,0,.15); color: #ffb800; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-left: 6px; vertical-align: middle; }
-  .make-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; -webkit-overflow-scrolling: touch; }
-  .make-tabs::-webkit-scrollbar { display: none; }
-  .make-tab { background: rgba(255,255,255,.06); padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
-  .make-tab.selected { background: linear-gradient(135deg, #ffb800, #ff7a00); color: #1a1a1a; }
-  .room-tabs { display: flex; gap: 8px; background: rgba(255,255,255,.05); border-radius: 12px; padding: 4px; margin-bottom: 12px; }
-  .room-tab { flex: 1; text-align: center; padding: 10px; font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer; color: #8d96aa; }
-  .room-tab.selected { background: rgba(255,255,255,.1); color: #fff; }
-  .code-input { font-size: 32px; font-weight: 800; text-align: center; letter-spacing: 8px; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.1); border-radius: 14px; padding: 14px; color: #fff; width: 100%; }
-  .code-input:focus { outline: none; border-color: #ffb800; }
-  .stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
-  .stat { flex: 1; background: rgba(255,255,255,.06); padding: 12px; border-radius: 12px; text-align: center; }
-  .stat-num { font-size: 24px; font-weight: 800; color: #ffb800; }
-  .stat-lbl { font-size: 11px; color: #8d96aa; margin-top: 2px; letter-spacing: 1px; }
-  .speed-warn { background: linear-gradient(135deg, #ff4d6d, #c11e3c); padding: 12px 14px; border-radius: 12px; margin-bottom: 12px; font-size: 13px; font-weight: 600; text-align: center; }
-  .demo-controls { position: fixed; bottom: 6px; left: 6px; right: 6px; display: flex; gap: 6px; justify-content: center; z-index: 100; pointer-events: none; flex-wrap: wrap; }
-  .demo-controls .btn { pointer-events: auto; padding: 6px 10px; font-size: 11px; background: rgba(255,255,255,.1); color: #fff; box-shadow: none; width: auto; }
-  .horn-spec { font-family: ui-monospace, monospace; font-size: 11px; color: #6b7589; margin-top: 2px; }
-  details { background: rgba(255,255,255,.04); padding: 12px; border-radius: 10px; margin-bottom: 10px; }
-  details summary { font-weight: 600; cursor: pointer; font-size: 14px; }
-  details p { margin-top: 8px; font-size: 13px; }
-  .lobby-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-  .lobby-row:last-child { border-bottom: none; }
-  .lobby-row .car-emoji { font-size: 28px; }
-  .lobby-row .name { flex: 1; font-weight: 600; font-size: 14px; }
-  .ready-badge { font-size: 12px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.08); color: #8d96aa; font-weight: 700; }
-  .ready-badge.ready { background: rgba(45,213,91,.2); color: #2dd55b; }
-  .ready-badge.host { background: rgba(255,184,0,.2); color: #ffb800; }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;background:#000;color:#fff;user-select:none}
+  body{display:flex;flex-direction:column}
+  .app{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;padding:20px;overflow-y:auto}
+  .screen.active{display:flex}
+
+  /* ---- TYPE ---- */
+  h1{font-size:30px;font-weight:900;margin-bottom:8px;letter-spacing:-1px}
+  h2{font-size:22px;font-weight:800;margin-bottom:6px;letter-spacing:-.5px}
+  p{font-size:15px;line-height:1.5;color:rgba(255,255,255,.55)}
+  .brand{font-size:11px;color:rgba(255,255,255,.3);letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;font-weight:800}
+
+  /* ---- GRADIENT TEXT ---- */
+  .grad{background:linear-gradient(135deg,#ff9500,#ff3d00);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .grad-green{background:linear-gradient(135deg,#00e676,#00b050);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* ---- BUTTONS ---- */
+  .btn{background:linear-gradient(135deg,#ff9500,#ff4000);color:#000;border:none;padding:16px 24px;border-radius:999px;font-size:17px;font-weight:800;cursor:pointer;width:100%;transition:transform .1s,box-shadow .1s;box-shadow:0 6px 28px rgba(255,80,0,.4);letter-spacing:.2px}
+  .btn:active{transform:scale(.96);box-shadow:0 2px 10px rgba(255,80,0,.25)}
+  .btn.ghost{background:rgba(255,255,255,.07);color:#fff;box-shadow:none;border:1px solid rgba(255,255,255,.1)}
+  .btn.ghost:active{background:rgba(255,255,255,.12)}
+  .btn.danger{background:linear-gradient(135deg,#f43f5e,#be123c);color:#fff;box-shadow:0 4px 16px rgba(244,63,94,.35)}
+  .btn.outline{background:transparent;color:#ff9500;box-shadow:none;border:1.5px solid rgba(255,149,0,.45)}
+  .btn.small{padding:10px 18px;font-size:14px;width:auto}
+  .btn[disabled]{opacity:.35;pointer-events:none}
+
+  /* ---- GLASS CARDS ---- */
+  .card{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);padding:14px;border-radius:22px;cursor:pointer;transition:all .15s}
+  .card:active{transform:scale(.97);background:rgba(255,255,255,.11)}
+  .card.selected{background:rgba(255,149,0,.14);border-color:rgba(255,149,0,.5)}
+  .glass{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);border-radius:20px;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+
+  /* ---- LAYOUT ---- */
+  .spacer{flex:1}
+  .stack{display:flex;flex-direction:column;gap:10px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row{display:flex;align-items:center;gap:10px}
+
+  /* ---- CAR PICKER ---- */
+  .car-icon{font-size:34px;margin-bottom:6px}
+  .car-name{font-weight:700;font-size:14px;line-height:1.2}
+  .car-horn{font-size:11px;color:rgba(255,255,255,.38);margin-top:4px}
+  .horn-spec{font-family:ui-monospace,monospace;font-size:10px;color:rgba(255,255,255,.25);margin-top:2px}
+
+  /* ---- TOP BAR ---- */
+  .top-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 0 12px}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:#00e676;box-shadow:0 0 10px #00e676}
+  .status-dot.offline{background:rgba(255,255,255,.28);box-shadow:none}
+  .status-dot.warn{background:#ff9500;box-shadow:0 0 10px #ff9500}
+  .status-row{display:flex;align-items:center;gap:7px;font-size:13px;color:rgba(255,255,255,.5)}
+
+  /* ---- MAP ---- */
+  #map{border-radius:24px;flex:1;min-height:200px;margin-bottom:10px;overflow:hidden;border:1px solid rgba(255,255,255,.07);background:#0d0d14}
+  .leaflet-container{background:#0d0d14!important}
+  .leaflet-tile{filter:brightness(.6) saturate(.45) hue-rotate(5deg)}
+  .car-marker{background:none;border:none}
+  .car-marker-inner{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;transform:translate(-50%,-50%)}
+  .car-marker-inner.you{background:linear-gradient(135deg,#ff9500,#ff4000);box-shadow:0 0 0 5px rgba(255,80,0,.22),0 0 28px rgba(255,80,0,.6)}
+  .car-marker-inner.other{background:rgba(255,255,255,.92);color:#1a1a1a;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+  .car-marker-inner.invited{background:linear-gradient(135deg,#00e676,#00b050);color:#000}
+
+  /* ---- TABS ---- */
+  .room-tabs{display:flex;gap:4px;background:rgba(255,255,255,.05);border-radius:16px;padding:4px;margin-bottom:10px;border:1px solid rgba(255,255,255,.07)}
+  .room-tab{flex:1;text-align:center;padding:10px;font-size:13px;font-weight:700;border-radius:12px;cursor:pointer;color:rgba(255,255,255,.4);transition:all .15s}
+  .room-tab.selected{background:rgba(255,255,255,.12);color:#fff}
+  .make-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;-webkit-overflow-scrolling:touch}
+  .make-tabs::-webkit-scrollbar{display:none}
+  .make-tab{background:rgba(255,255,255,.07);padding:8px 16px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;flex-shrink:0;border:1px solid rgba(255,255,255,.08);transition:all .15s}
+  .make-tab.selected{background:linear-gradient(135deg,#ff9500,#ff4000);color:#000;border-color:transparent}
+
+  /* ---- TOGGLE ---- */
+  .toggle-bar{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.06);padding:14px 18px;border-radius:20px;margin-bottom:10px;border:1px solid rgba(255,255,255,.08)}
+  .switch{position:relative;width:52px;height:30px;background:rgba(255,255,255,.14);border-radius:30px;cursor:pointer;transition:background .2s;flex-shrink:0}
+  .switch.on{background:#00e676}
+  .switch::after{content:'';position:absolute;top:3px;left:3px;width:24px;height:24px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+  .switch.on::after{transform:translateX(22px)}
+
+  /* ---- INVITE BANNER ---- */
+  .invite-banner{background:linear-gradient(135deg,#00e676,#00b050);color:#000;padding:14px 16px;border-radius:20px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;animation:slideIn .3s;box-shadow:0 4px 24px rgba(0,230,118,.3)}
+  .invite-banner .btn{width:auto;padding:9px 18px;font-size:14px}
+  .invite-banner.orange{background:linear-gradient(135deg,#ff9500,#ff4000);box-shadow:0 4px 24px rgba(255,80,0,.3)}
+  @keyframes slideIn{from{transform:translateY(-14px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  /* ---- SONGS ---- */
+  .song-list{display:flex;flex-direction:column;gap:8px}
+  .song-row{background:rgba(255,255,255,.06);padding:14px 16px;border-radius:18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:12px;border:1px solid rgba(255,255,255,.08);transition:all .15s}
+  .song-row:active{background:rgba(255,255,255,.11)}
+  .song-name{font-weight:700;font-size:15px}
+  .song-meta{font-size:12px;color:rgba(255,255,255,.38);margin-top:3px}
+  .difficulty{display:inline-block;font-size:10px;padding:2px 8px;border-radius:999px;font-weight:800;letter-spacing:.5px;margin-left:6px;vertical-align:middle}
+  .diff-easy{background:rgba(0,230,118,.14);color:#00e676}
+  .diff-med{background:rgba(255,149,0,.14);color:#ff9500}
+  .diff-hard{background:rgba(244,63,94,.14);color:#f43f5e}
+
+  /* ---- HONKS PER CAR ---- */
+  .hpc-row{display:flex;align-items:center;justify-content:space-between;background:rgba(255,149,0,.08);padding:12px 16px;border-radius:18px;margin-bottom:10px;border:1px solid rgba(255,149,0,.2)}
+  .hpc-stepper{display:flex;align-items:center;gap:14px}
+  .hpc-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.09);color:#fff;font-size:22px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;transition:all .1s}
+  .hpc-btn:active{background:rgba(255,255,255,.18)}
+  .hpc-num-big{font-size:28px;font-weight:900;color:#ff9500;min-width:36px;text-align:center}
+
+  /* ---- PLAY SCREEN ---- */
+  .countdown{font-size:160px;font-weight:900;text-align:center;line-height:1;letter-spacing:-6px;background:linear-gradient(135deg,#ff9500,#ff3d00);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .play-area{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:14px;padding:10px 0}
+  .honk-btn{width:220px;height:220px;border-radius:50%;background:linear-gradient(145deg,#ff9500,#ff3d00);border:none;color:#000;font-size:30px;font-weight:900;cursor:pointer;box-shadow:0 0 0 12px rgba(255,80,0,.12),0 0 70px rgba(255,80,0,.5),0 14px 40px rgba(0,0,0,.5);transition:all .1s;letter-spacing:2px}
+  .honk-btn:active{transform:scale(.93);box-shadow:0 0 0 6px rgba(255,80,0,.2),0 0 30px rgba(255,80,0,.3)}
+  .honk-btn.ready{animation:hornPulse .38s ease-in-out infinite alternate}
+  @keyframes hornPulse{from{box-shadow:0 0 0 12px rgba(255,80,0,.12),0 0 70px rgba(255,80,0,.5)}to{box-shadow:0 0 0 28px rgba(255,80,0,.4),0 0 130px rgba(255,80,0,.9)}}
+  @keyframes honkBob{0%,100%{transform:scale(1) rotate(-4deg)}50%{transform:scale(1.1) rotate(4deg)}}
+
+  .timeline{width:100%;height:62px;background:rgba(255,255,255,.04);border-radius:16px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.07)}
+  .timeline-track{position:absolute;top:50%;transform:translateY(-50%);left:0;right:0;height:2px;background:rgba(255,255,255,.08)}
+  .timeline-marker{position:absolute;top:50%;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;background:rgba(255,255,255,.1);transition:all .2s;border:1.5px solid rgba(255,255,255,.14)}
+  .timeline-marker.you{background:linear-gradient(135deg,#ff9500,#ff4000);border-color:rgba(255,255,255,.5)}
+  .timeline-marker.played{opacity:.22}
+  .timeline-marker.active{transform:translate(-50%,-50%) scale(1.7);box-shadow:0 0 20px #ff9500;z-index:2}
+  .timeline-cursor{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.75);transition:left .05s linear}
+
+  .next-cue{text-align:center;font-size:14px;color:rgba(255,255,255,.45)}
+  .next-cue .time{font-size:44px;font-weight:900;color:#fff;display:block;line-height:1.1;letter-spacing:-1px}
+  .now-playing{display:flex;align-items:flex-start;justify-content:center;gap:8px;min-height:78px;flex-wrap:wrap}
+  .np-car{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:24px;border:2px solid rgba(255,255,255,.1);transition:all .15s;flex-shrink:0;position:relative}
+  .np-car.live{background:linear-gradient(135deg,#00e676,#00b050);border-color:rgba(255,255,255,.6);transform:scale(1.2);box-shadow:0 0 32px rgba(0,230,118,.6)}
+  .np-car.live.you-car{background:linear-gradient(135deg,#ff9500,#ff4000);box-shadow:0 0 32px rgba(255,80,0,.7)}
+  .np-car .lbl{position:absolute;top:56px;font-size:9px;color:rgba(255,255,255,.4);font-weight:700;letter-spacing:.5px;white-space:nowrap}
+  .np-car.live .lbl{color:#fff}
+
+  /* ---- PREROLL ---- */
+  #preroll-banner{background:linear-gradient(135deg,#ff9500,#ff4000);color:#000;padding:18px 20px;border-radius:22px;text-align:center;box-shadow:0 0 60px rgba(255,80,0,.55);width:100%}
+
+  /* ---- PERMS ---- */
+  .perm-row{background:rgba(255,255,255,.06);padding:14px;border-radius:18px;margin-bottom:10px;display:flex;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.08)}
+  .perm-icon{font-size:26px}
+  .perm-text{flex:1}
+  .perm-text strong{display:block;font-size:14px;margin-bottom:2px}
+  .perm-text span{font-size:12px;color:rgba(255,255,255,.4)}
+  .perm-status{font-size:12px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.08);white-space:nowrap}
+  .perm-status.granted{background:rgba(0,230,118,.14);color:#00e676}
+  .perm-status.denied{background:rgba(244,63,94,.14);color:#f43f5e}
+
+  /* ---- MISC ---- */
+  .legal{font-size:11px;color:rgba(255,255,255,.28);text-align:center;line-height:1.5;margin-top:12px}
+  .back{background:none;border:none;color:#ff9500;font-size:15px;padding:0;cursor:pointer;font-weight:700;align-self:flex-start;margin-bottom:4px}
+  .badge{display:inline-block;background:rgba(255,149,0,.12);color:#ff9500;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:1px;margin-left:6px;vertical-align:middle}
+  .code-input{font-size:36px;font-weight:900;text-align:center;letter-spacing:10px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:18px;padding:14px;color:#fff;width:100%}
+  .code-input:focus{outline:none;border-color:#ff9500;box-shadow:0 0 0 3px rgba(255,149,0,.15)}
+  .stat-row{display:flex;gap:10px;margin-bottom:16px}
+  .stat{flex:1;background:rgba(255,255,255,.06);padding:12px;border-radius:18px;text-align:center;border:1px solid rgba(255,255,255,.08)}
+  .stat-num{font-size:28px;font-weight:900;background:linear-gradient(135deg,#ff9500,#ff4000);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat-lbl{font-size:10px;color:rgba(255,255,255,.3);margin-top:3px;letter-spacing:1.5px;font-weight:700}
+  .speed-warn{background:linear-gradient(135deg,#f43f5e,#be123c);padding:12px 14px;border-radius:16px;margin-bottom:10px;font-size:13px;font-weight:700;text-align:center}
+  details{background:rgba(255,255,255,.04);padding:12px;border-radius:16px;margin-bottom:10px;border:1px solid rgba(255,255,255,.07)}
+  details summary{font-weight:700;cursor:pointer;font-size:14px}
+  details p{margin-top:8px;font-size:13px}
+
+  /* ---- LOBBY ---- */
+  .lobby-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.05)}
+  .lobby-row:last-child{border-bottom:none}
+  .lobby-row .car-emoji{font-size:28px}
+  .lobby-row .name{flex:1;font-weight:700;font-size:14px}
+  .ready-badge{font-size:12px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.38);font-weight:700}
+  .ready-badge.ready{background:rgba(0,230,118,.14);color:#00e676}
+  .ready-badge.host{background:rgba(255,149,0,.14);color:#ff9500}
+
+  /* ---- DEMO CONTROLS ---- */
+  .demo-controls{position:fixed;bottom:6px;left:6px;right:6px;display:flex;gap:6px;justify-content:center;z-index:100;pointer-events:none;flex-wrap:wrap}
+  .demo-controls .btn{pointer-events:auto;padding:6px 10px;font-size:11px;background:rgba(255,255,255,.08);color:#fff;box-shadow:none;width:auto;border:1px solid rgba(255,255,255,.1)}
+
+  /* ---- STORY CIRCLES ---- */
+  .story-circles{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 10px;-webkit-overflow-scrolling:touch;flex-shrink:0}
+  .story-circles::-webkit-scrollbar{display:none}
+  .story-circle{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;cursor:pointer}
+  .story-ring{width:58px;height:58px;border-radius:50%;padding:2.5px;background:linear-gradient(135deg,#ff9500,#ff4000)}
+  .story-ring.you-ring{background:linear-gradient(135deg,#c084fc,#7c3aed)}
+  .story-ring.cool{background:linear-gradient(135deg,#00e676,#00b050)}
+  .story-ring.dim{background:rgba(255,255,255,.2)}
+  .story-inner{width:100%;height:100%;border-radius:50%;background:#0d0d14;display:flex;align-items:center;justify-content:center;font-size:28px;border:2.5px solid #000}
+  .story-label{font-size:10px;font-weight:700;color:rgba(255,255,255,.55);max-width:58px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .story-vibe-text{font-size:9px;color:#ff9500;font-weight:800;max-width:62px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
 <div class="app">
 
   <!-- Splash / Welcome -->
-  <div class="screen active" id="screen-welcome">
-    <div class="brand">HONKESTRA</div>
-    <h1>Stuck in traffic?<br>Make music. 🎺</h1>
-    <p>When you're stopped in traffic and in the mood, jam with the cars around you. Every car has its own horn pitch — together you play a song.</p>
-    <div class="hero">🚗🎵🚙</div>
-    <div class="spacer"></div>
-    <input id="driver-name-input" placeholder="Your name (optional, e.g. Chaya)" maxlength="14" style="width:100%;font-size:16px;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px;text-align:center">
-    <div class="stack">
-      <button class="btn" onclick="saveDriverName(); go('perms')">Get started</button>
-      <p class="legal">Honk only when it's safe and legal. Honkestra stops itself when you're moving. You're always in control.</p>
+  <div class="screen active" id="screen-welcome" style="padding:24px 20px">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 20%,rgba(255,90,0,.2),transparent 65%);pointer-events:none"></div>
+    <div style="position:relative;z-index:1;display:flex;flex-direction:column;height:100%">
+      <div style="font-size:11px;font-weight:800;letter-spacing:4px;color:rgba(255,255,255,.28);text-align:center;margin-bottom:8px">HONKESTRA</div>
+      <div style="text-align:center;margin:10px 0 0">
+        <div style="font-size:88px;line-height:1;display:inline-block;animation:honkBob 2s ease-in-out infinite">🎺</div>
+      </div>
+      <h1 style="font-size:clamp(32px,9vw,46px);font-weight:900;text-align:center;line-height:1.06;letter-spacing:-1.5px;margin:18px 0 10px">traffic?<br><span class="grad">make it a concert.</span></h1>
+      <p style="text-align:center;font-size:15px;color:rgba(255,255,255,.45);padding:0 12px;line-height:1.6">every car has a horn. together you play real songs.<br>no cap this actually slaps.</p>
+      <div style="flex:1;min-height:16px"></div>
+      <input id="driver-name-input" placeholder="what do they call you? (optional)" maxlength="14" style="width:100%;font-size:16px;padding:14px 18px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:999px;color:#fff;margin-bottom:12px;text-align:center;outline:none">
+      <div class="stack">
+        <button class="btn" style="font-size:19px;padding:18px;letter-spacing:.5px" onclick="saveDriverName(); go('perms')">pull up 🎺</button>
+        <p class="legal">honk only when it's safe + legal. app locks while you're moving.</p>
+      </div>
     </div>
   </div>
 
   <!-- Permissions -->
   <div class="screen" id="screen-perms">
-    <button class="back" onclick="go('welcome')">← Back</button>
-    <h2 style="margin-top:8px">A few permissions</h2>
-    <p style="margin-bottom:16px">So we can find drivers near you and ping you when someone wants to jam.</p>
+    <button class="back" onclick="go('welcome')">← back</button>
+    <h2 style="margin-top:8px">quick setup</h2>
+    <p style="margin-bottom:18px">so we can find honkers near you and notify you when someone wants to jam.</p>
 
     <div class="perm-row">
       <div class="perm-icon">📍</div>
-      <div class="perm-text"><strong>Location</strong><span>To find cars near you (we never store it)</span></div>
-      <div class="perm-status" id="perm-loc">Not yet</div>
+      <div class="perm-text"><strong>Location</strong><span>finds cars around you — never stored</span></div>
+      <div class="perm-status" id="perm-loc">not yet</div>
     </div>
-    <button class="btn ghost" onclick="askLocation()">Allow location</button>
+    <button class="btn ghost" style="margin-bottom:14px" onclick="askLocation()">allow location</button>
 
-    <div class="perm-row" style="margin-top:14px">
+    <div class="perm-row">
       <div class="perm-icon">🔔</div>
-      <div class="perm-text"><strong>Notifications</strong><span>So drivers can ping you to jam</span></div>
-      <div class="perm-status" id="perm-notif">Not yet</div>
+      <div class="perm-text"><strong>Notifications</strong><span>so drivers can ping you to jam</span></div>
+      <div class="perm-status" id="perm-notif">not yet</div>
     </div>
-    <button class="btn ghost" onclick="askNotif()">Allow notifications</button>
+    <button class="btn ghost" onclick="askNotif()">allow notifications</button>
 
-    <details style="margin-top:20px">
-      <summary>How does this find other drivers?</summary>
-      <p>Your phone connects to a tiny cloud relay (Supabase Realtime — encrypted, no signup needed). It broadcasts your GPS spot and car type and listens for other phones in the same area. We never store your location anywhere. Or skip GPS and use a 4-digit friend code with people you know.</p>
+    <details style="margin-top:18px">
+      <summary>how does this find other drivers?</summary>
+      <p>your phone connects to a tiny cloud relay (encrypted, no signup). it broadcasts your GPS spot + car type and listens for others nearby. location is never stored. or skip GPS entirely and use a 4-digit friend code.</p>
     </details>
 
     <div class="spacer"></div>
-    <button class="btn" onclick="go('car-make')">Continue</button>
+    <button class="btn" onclick="go('car-make')">let's go →</button>
   </div>
 
   <!-- Car make picker -->
@@ -200,94 +270,111 @@
   <div class="screen" id="screen-home">
     <div class="top-bar">
       <div>
-        <div class="brand" style="margin-bottom:2px">HONKESTRA</div>
-        <div class="status-row"><span class="status-dot" id="status-dot"></span><span id="status-text">Looking for drivers…</span></div>
+        <div class="brand" style="margin-bottom:1px">HONKESTRA</div>
+        <div class="status-row"><span class="status-dot" id="status-dot"></span><span id="status-text">looking for drivers…</span></div>
       </div>
-      <button class="btn ghost small" onclick="go('car-make')">🚗 <span id="my-car-name">Car</span></button>
+      <button class="btn ghost small" onclick="go('car-make')">🚗 <span id="my-car-name">car</span></button>
     </div>
 
-    <div class="room-tabs" style="background:rgba(255,184,0,0.08);border:1px solid rgba(255,184,0,0.2)">
-      <div class="room-tab" data-mode="game" onclick="setMode('game')">🎮 Game mode</div>
-      <div class="room-tab" data-mode="real" onclick="setMode('real')">🛣️ Real World</div>
+    <div class="room-tabs" style="background:rgba(255,149,0,.07);border:1px solid rgba(255,149,0,.15)">
+      <div class="room-tab" data-mode="game" onclick="setMode('game')">🎮 game mode</div>
+      <div class="room-tab" data-mode="real" onclick="setMode('real')">🛣️ real world</div>
     </div>
-    <div id="mode-hint" style="font-size:12px;color:#8d96aa;text-align:center;margin-bottom:10px">—</div>
+    <div id="mode-hint" style="font-size:12px;color:rgba(255,255,255,.38);text-align:center;margin-bottom:8px">—</div>
 
     <div class="room-tabs">
-      <div class="room-tab selected" data-room="nearby" onclick="setRoom('nearby')">📍 Nearby</div>
-      <div class="room-tab" data-room="code" onclick="setRoom('code')">🔢 Friend code</div>
+      <div class="room-tab selected" data-room="nearby" onclick="setRoom('nearby')">📍 nearby</div>
+      <div class="room-tab" data-room="code" onclick="setRoom('code')">🔢 friend code</div>
     </div>
 
-    <div id="debug-strip" style="font-size:11px;color:#6b7589;text-align:center;margin-bottom:8px;font-family:ui-monospace,monospace">—</div>
+    <div id="debug-strip" style="font-size:10px;color:rgba(255,255,255,.22);text-align:center;margin-bottom:6px;font-family:ui-monospace,monospace">—</div>
     <div id="speed-warn-slot"></div>
-    <div id="code-slot" style="display:none">
+    <div id="code-slot" style="display:none;margin-bottom:10px">
       <input class="code-input" id="code-in" maxlength="4" placeholder="1234" inputmode="numeric" pattern="[0-9]*">
-      <p style="text-align:center;margin-top:8px;font-size:12px;color:#8d96aa">Type a 4-digit code. Same code = same room.</p>
+      <p style="text-align:center;margin-top:6px;font-size:12px;color:rgba(255,255,255,.38)">same code = same room</p>
     </div>
 
+    <!-- vibe + online -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:2px;color:rgba(255,255,255,.35)">VIBE CHECK</div>
+      <div style="font-size:12px;font-weight:700;color:#00e676">● <span id="online-count">1</span> honking now</div>
+    </div>
+    <div class="make-tabs" id="vibe-chips" style="margin-bottom:10px;flex-shrink:0;min-height:38px"></div>
+
+    <!-- story circles -->
+    <div class="story-circles" id="story-circles" style="margin-bottom:10px"></div>
+
+    <!-- mood toggle -->
     <div class="toggle-bar">
       <div>
-        <div style="font-weight:700;font-size:15px">I'm in the mood to jam</div>
-        <div style="font-size:12px;color:#8d96aa" id="mood-sub">Other drivers can invite you</div>
+        <div style="font-weight:800;font-size:15px">i'm down to jam</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.42)" id="mood-sub">others can find + invite you</div>
       </div>
       <div class="switch on" id="mood-switch" onclick="toggleMood()"></div>
     </div>
 
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="font-size:12px;color:#8d96aa;font-weight:700">📣 YOUR VIBE <span style="color:#6b7589;font-weight:400">(others see this)</span></div>
-      <div style="font-size:12px;color:#2dd55b;font-weight:700">🟢 <span id="online-count">1</span> honking now</div>
-    </div>
-    <div class="make-tabs" id="vibe-chips" style="margin-bottom:12px;flex-shrink:0;min-height:40px"></div>
-
     <div id="invite-slot"></div>
 
-    <div style="position:relative;flex:1;min-height:260px;margin-bottom:12px">
+    <div style="position:relative;flex:1;min-height:200px;margin-bottom:10px">
       <div id="map" style="margin:0;position:absolute;inset:0"></div>
-      <button onclick="recenterMap()" style="position:absolute;right:10px;bottom:10px;z-index:500;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)">📍</button>
+      <button onclick="recenterMap()" style="position:absolute;right:10px;bottom:10px;z-index:500;background:rgba(0,0,0,.7);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer">📍</button>
     </div>
 
-    <div id="honker-list"></div>
-
-    <div style="text-align:center;font-size:12px;color:#8d96aa;margin:4px 0 8px" id="song-count-hint">— songs ready —</div>
+    <div style="text-align:center;font-size:12px;color:rgba(255,255,255,.3);margin:2px 0 8px" id="song-count-hint">— loading songs —</div>
     <div class="stack">
-      <button class="btn" onclick="startJam()">🎺 Start a jam</button>
-      <button class="btn ghost" onclick="surpriseMe()">🎲 Surprise me — random song now</button>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:12px;color:#8d96aa;white-space:nowrap">within</span>
-        <select id="invite-radius" style="background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 8px;font-size:13px;font-weight:600">
+      <button class="btn" style="font-size:18px" onclick="startJam()">🎺 start a jam</button>
+      <button class="btn ghost" onclick="surpriseMe()">🎲 surprise me — random track</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:12px;color:rgba(255,255,255,.38);white-space:nowrap;flex-shrink:0">within</span>
+        <select id="invite-radius" style="background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:9px 12px;font-size:13px;font-weight:700;flex-shrink:0">
           <option value="100">100 ft</option>
           <option value="300">300 ft</option>
           <option value="500" selected>500 ft</option>
           <option value="1000">1000 ft</option>
-          <option value="99999">Anyone nearby</option>
+          <option value="99999">anyone nearby</option>
         </select>
-        <button class="btn ghost" style="flex:1" onclick="broadcastJamRequest()">📣 Invite everyone nearby</button>
+        <button class="btn ghost" style="flex:1;padding:10px 12px;font-size:14px" onclick="broadcastJamRequest()">📣 invite everyone</button>
       </div>
-      <button class="btn ghost" onclick="shareMyHonk()">🔗 Share my code — "Let's go horn!"</button>
-      <button class="btn ghost" onclick="go('event')">🎉 Create an event / convoy</button>
-      <button class="btn ghost" onclick="go('create-song')">✏️ Create your own song</button>
-      <button class="btn ghost" onclick="go('record')">🎤 <span id="rec-btn-label">Record your real horn</span></button>
-      <button class="btn ghost" onclick="soundTest()" style="font-size:13px;padding:10px">🔊 Sound test (check phone volume)</button>
+      <button class="btn outline" onclick="shareMyHonk()">🔗 "let's go horn!" — share code</button>
+      <button class="btn ghost" onclick="go('event')">🎉 event / convoy mode</button>
+      <button class="btn ghost" onclick="go('create-song')">✏️ make your own song</button>
+      <button class="btn ghost" onclick="go('record')">🎤 <span id="rec-btn-label">record your real horn</span></button>
+      <button class="btn ghost" style="font-size:13px;padding:10px" onclick="soundTest()">🔊 sound check</button>
     </div>
   </div>
 
   <!-- Song picker -->
   <div class="screen" id="screen-song">
-    <button class="back" onclick="go('home')">← Back</button>
-    <h2 style="margin-top:8px">Pick a song</h2>
-    <p style="margin-bottom:12px"><span id="jam-count">3</span> cars are jamming.</p>
-    <input id="song-search" placeholder="🔎 Search songs (e.g. birthday, bond, twinkle)…" oninput="renderSongs()" style="width:100%;font-size:15px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px">
+    <button class="back" onclick="go('home')">← back</button>
+    <h2 style="margin-top:8px">pick a track</h2>
+    <p style="margin-bottom:12px"><span id="jam-count">3</span> cars in the jam</p>
+
+    <!-- Honks per car -->
+    <div class="hpc-row">
+      <div>
+        <div style="font-weight:800;font-size:14px">honks per car</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:2px">each driver honks this many times</div>
+      </div>
+      <div class="hpc-stepper">
+        <button class="hpc-btn" onclick="setHonksPerCar(HONKS_PER_CAR-1)">−</button>
+        <span class="hpc-num-big" id="honks-per-car-num">10</span>
+        <button class="hpc-btn" onclick="setHonksPerCar(HONKS_PER_CAR+1)">+</button>
+      </div>
+    </div>
+
+    <input id="song-search" placeholder="🔎 search songs…" oninput="renderSongs()" style="width:100%;font-size:15px;padding:11px 16px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:999px;color:#fff;margin-bottom:10px;outline:none">
     <div class="make-tabs" id="song-cat-tabs" style="margin-bottom:10px"></div>
     <div class="toggle-bar" style="padding:10px 14px;margin-bottom:8px">
       <div>
-        <div style="font-weight:700;font-size:14px" id="record-toggle-label">📹 Record jam as video</div>
-        <div style="font-size:11px;color:#8d96aa" id="record-toggle-sub">For TikTok / Insta after</div>
+        <div style="font-weight:700;font-size:14px" id="record-toggle-label">📹 record jam as video</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.4)" id="record-toggle-sub">for TikTok / Reels after</div>
       </div>
       <div class="switch" id="rec-switch" onclick="toggleRecordJam()"></div>
     </div>
     <div class="toggle-bar" style="padding:10px 14px;margin-bottom:12px">
       <div>
-        <div style="font-weight:700;font-size:14px">🥊 Honk Battle (Red vs Blue)</div>
-        <div style="font-size:11px;color:#8d96aa">Cars split into 2 teams, highest hits wins</div>
+        <div style="font-weight:700;font-size:14px">🥊 honk battle (red vs blue)</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.4)">teams compete — highest honks wins</div>
       </div>
       <div class="switch" id="battle-switch" onclick="toggleBattle()"></div>
     </div>
@@ -297,76 +384,76 @@
 
   <!-- Share / preview video -->
   <div class="screen" id="screen-share">
-    <button class="back" onclick="go('home')">← Back to map</button>
-    <h2 style="margin-top:8px">🎉 Your jam is ready!</h2>
-    <p style="margin-bottom:10px">Share this clip on TikTok or Instagram.</p>
-    <video id="share-video" controls playsinline style="width:100%;border-radius:14px;background:#000;max-height:50vh"></video>
+    <button class="back" onclick="go('home')">← back to map</button>
+    <h2 style="margin-top:8px">🎺 your jam is ready!</h2>
+    <p style="margin-bottom:10px">post this on TikTok or Reels. fr fr.</p>
+    <video id="share-video" controls playsinline style="width:100%;border-radius:20px;background:#000;max-height:50vh"></video>
     <div class="stack" style="margin-top:14px">
-      <button class="btn" onclick="shareJamVideo()">📲 Share / save video</button>
-      <button class="btn ghost" onclick="downloadJamVideo()">💾 Download</button>
-      <button class="btn ghost" onclick="go('end')">📊 See stats</button>
+      <button class="btn" onclick="shareJamVideo()">📲 share / save video</button>
+      <button class="btn ghost" onclick="downloadJamVideo()">💾 download</button>
+      <button class="btn ghost" onclick="go('end')">📊 see stats</button>
     </div>
-    <p class="legal">Web video shares as .webm on Android & desktop, .mp4 on iOS. Both upload fine to TikTok and Instagram.</p>
+    <p class="legal">shares as .webm on android, .mp4 on iOS. both work on TikTok + Instagram.</p>
   </div>
 
   <!-- Practice song picker -->
   <div class="screen" id="screen-practice-pick">
-    <button class="back" onclick="go('welcome')">← Back</button>
-    <h2 style="margin-top:8px">Practice mode 🎮</h2>
-    <p style="margin-bottom:12px">Play alone. Your phone plays every car so you can learn the songs.</p>
+    <button class="back" onclick="go('welcome')">← back</button>
+    <h2 style="margin-top:8px">practice mode 🎮</h2>
+    <p style="margin-bottom:12px">play alone. your phone plays every car so you can vibe with the songs.</p>
     <div class="song-list" id="practice-song-list"></div>
   </div>
 
-  <!-- Lobby — wait for everyone to be ready -->
+  <!-- Lobby -->
   <div class="screen" id="screen-lobby">
-    <button class="back" onclick="leaveLobby()">← Leave lobby</button>
-    <h2 style="margin-top:8px" id="lobby-song">🎵 Song</h2>
-    <p style="margin-bottom:14px" id="lobby-status">Waiting for drivers…</p>
+    <button class="back" onclick="leaveLobby()">← leave</button>
+    <h2 style="margin-top:8px" id="lobby-song">🎵 song</h2>
+    <p style="margin-bottom:14px" id="lobby-status">waiting for the crew…</p>
 
-    <div style="background:rgba(255,255,255,0.04);border-radius:14px;padding:8px;margin-bottom:14px" id="lobby-list"></div>
+    <div class="glass" style="padding:8px;margin-bottom:14px" id="lobby-list"></div>
 
     <div class="spacer"></div>
     <div class="stack">
-      <button class="btn" id="lobby-ready" onclick="toggleReady()">Tap when ready</button>
-      <button class="btn" id="lobby-start" style="display:none" onclick="lobbyHostStart()">⏰ Start jam</button>
+      <button class="btn" id="lobby-ready" onclick="toggleReady()" style="font-size:17px">i'm ready — let's GO 🎺</button>
+      <button class="btn" id="lobby-start" style="display:none" onclick="lobbyHostStart()">🚀 start the jam</button>
     </div>
-    <p class="legal" id="lobby-hint">All phones will count down together once the host starts.</p>
+    <p class="legal" id="lobby-hint">all phones sync together when the host starts.</p>
   </div>
 
   <!-- Countdown -->
-  <div class="screen" id="screen-countdown">
+  <div class="screen" id="screen-countdown" style="background:radial-gradient(ellipse at 50% 40%,rgba(255,80,0,.18),transparent 65%)">
     <div class="play-area">
-      <p style="font-size:18px">Get ready to honk…</p>
+      <p style="font-size:16px;font-weight:800;letter-spacing:3px;color:rgba(255,255,255,.6)">GET READY</p>
       <div class="countdown" id="cdNum">3</div>
-      <p style="color:#8d96aa">Watch your phone — it'll tell you when</p>
+      <p style="color:rgba(255,255,255,.4)">watch your screen</p>
     </div>
   </div>
 
   <!-- Play -->
-  <div class="screen" id="screen-play" onclick="onPlayTap(event)">
-    <div class="top-bar">
+  <div class="screen" id="screen-play" onclick="onPlayTap(event)" style="background:#000;padding:16px">
+    <div class="top-bar" style="padding-bottom:8px">
       <div>
-        <div class="brand" style="margin-bottom:2px" id="play-song-name">SONG</div>
+        <div class="brand" id="play-song-name">SONG</div>
         <div class="status-row"><span class="status-dot"></span><span id="play-drivers">3 cars</span></div>
       </div>
-      <button class="btn ghost small danger" onclick="stopJam()">Stop</button>
+      <button class="btn danger small" onclick="stopJam()">stop</button>
     </div>
 
-    <div class="play-area">
+    <div class="play-area" style="gap:12px">
       <div class="now-playing" id="np-row"></div>
 
-      <div id="preroll-banner" style="display:none;background:linear-gradient(135deg,#ffb800,#ff7a00);color:#1a1a1a;padding:16px 20px;border-radius:18px;text-align:center;box-shadow:0 0 50px rgba(255,184,0,0.5);width:100%">
-        <div style="font-size:13px;letter-spacing:3px;font-weight:700;opacity:0.8">🎺 SONG STARTS IN</div>
-        <div id="preroll-num" style="font-size:84px;font-weight:900;line-height:1;margin:4px 0">6</div>
-        <div style="font-size:12px;opacity:0.8">Watch the timeline — your honks are orange</div>
+      <div id="preroll-banner" style="display:none">
+        <div style="font-size:12px;letter-spacing:3px;font-weight:800;opacity:.8">🎺 STARTING IN</div>
+        <div id="preroll-num" style="font-size:100px;font-weight:900;line-height:1;margin:4px 0">6</div>
+        <div style="font-size:12px;opacity:.75">watch the timeline — your honks are orange</div>
       </div>
 
       <div class="next-cue">
-        Your next honk in
+        your next honk in
         <span class="time" id="next-time">—</span>
       </div>
 
-      <video id="camera-preview" autoplay muted playsinline style="display:none;position:absolute;top:60px;right:12px;width:110px;height:160px;border-radius:14px;object-fit:cover;border:2px solid #ffb800;z-index:5;background:#000"></video>
+      <video id="camera-preview" autoplay muted playsinline style="display:none;position:absolute;top:60px;right:12px;width:100px;height:150px;border-radius:14px;object-fit:cover;border:2px solid #ff9500;z-index:5;background:#000"></video>
 
       <button class="honk-btn" id="honk-btn" onclick="manualHonk()">HONK</button>
 
@@ -379,79 +466,79 @@
 
   <!-- Custom song creator -->
   <div class="screen" id="screen-create-song">
-    <button class="back" onclick="go('home')">← Back</button>
-    <h2 style="margin-top:8px">✏️ Create your own song</h2>
-    <p style="margin-bottom:14px">Tap the big button to the beat you want. Each tap is one honk. Tap "Stop" when done. We'll spread the pitches across all jamming cars.</p>
+    <button class="back" onclick="go('home')">← back</button>
+    <h2 style="margin-top:8px">✏️ make your own track</h2>
+    <p style="margin-bottom:14px">tap to the beat. each tap = one honk. we spread pitches across all cars.</p>
 
-    <input id="custom-name" placeholder="Name your song (e.g. My Birthday Beat)" style="width:100%;font-size:16px;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:14px">
+    <input id="custom-name" placeholder="name your song (e.g. my birthday beat)" style="width:100%;font-size:16px;padding:13px 18px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:16px;color:#fff;margin-bottom:14px;outline:none">
 
     <div class="play-area" style="gap:14px">
-      <div id="cs-status" style="font-size:18px;text-align:center;color:#b8c0d0;min-height:30px">Press "Start" then tap to the beat.</div>
+      <div id="cs-status" style="font-size:17px;text-align:center;color:rgba(255,255,255,.55);min-height:30px">hit start — then tap to the beat</div>
       <button id="cs-tap" class="honk-btn" style="width:180px;height:180px;font-size:24px" disabled onclick="csTap()">TAP</button>
-      <div style="font-size:14px;color:#8d96aa">Honks: <span id="cs-count">0</span></div>
+      <div style="font-size:14px;color:rgba(255,255,255,.4)">taps: <span id="cs-count">0</span></div>
       <div class="stack" style="width:100%">
-        <button class="btn" id="cs-start" onclick="csStart()">🔴 Start recording rhythm</button>
-        <button class="btn ghost" id="cs-stop" style="display:none" onclick="csStop()">⏹ Stop</button>
-        <button class="btn ghost" id="cs-preview" style="display:none" onclick="csPreview()">▶️ Preview</button>
-        <button class="btn" id="cs-save" style="display:none" onclick="csSave()">💾 Save song</button>
+        <button class="btn" id="cs-start" onclick="csStart()">🔴 start recording</button>
+        <button class="btn ghost" id="cs-stop" style="display:none" onclick="csStop()">⏹ stop</button>
+        <button class="btn ghost" id="cs-preview" style="display:none" onclick="csPreview()">▶️ preview</button>
+        <button class="btn" id="cs-save" style="display:none" onclick="csSave()">💾 save track</button>
       </div>
     </div>
 
     <details style="margin-top:14px">
-      <summary>Your custom songs</summary>
+      <summary>your saved tracks</summary>
       <div id="cs-list" style="margin-top:8px"></div>
     </details>
   </div>
 
   <!-- Event / Convoy creator -->
   <div class="screen" id="screen-event">
-    <button class="back" onclick="go('home')">← Back</button>
-    <h2 style="margin-top:8px">🎉 Event / Convoy Mode</h2>
-    <p style="margin-bottom:14px">For weddings, parades, tailgates. Create a private room with a 4-letter code your group enters to join.</p>
+    <button class="back" onclick="go('home')">← back</button>
+    <h2 style="margin-top:8px">🎉 event / convoy mode</h2>
+    <p style="margin-bottom:14px">for weddings, parades, tailgates. create a private room — everyone enters your code to join.</p>
 
-    <input id="event-name" placeholder="Event name (e.g. Sara's Wedding)" style="width:100%;font-size:16px;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;margin-bottom:10px">
-    <button class="btn" onclick="createEvent()">Create event code</button>
+    <input id="event-name" placeholder="event name (e.g. Sara's wedding)" style="width:100%;font-size:16px;padding:13px 18px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:16px;color:#fff;margin-bottom:10px;outline:none">
+    <button class="btn" onclick="createEvent()">create event code</button>
 
-    <div id="event-card" style="display:none;margin-top:16px;padding:20px;background:linear-gradient(135deg,rgba(255,184,0,0.15),rgba(255,122,0,0.1));border:1px solid #ffb800;border-radius:18px;text-align:center">
-      <div style="font-size:14px;color:#ffb800;letter-spacing:2px">YOUR EVENT CODE</div>
-      <div id="event-code-display" style="font-size:60px;font-weight:900;letter-spacing:12px;margin:8px 0">----</div>
+    <div id="event-card" style="display:none;margin-top:16px;padding:22px;background:linear-gradient(135deg,rgba(255,149,0,.14),rgba(255,60,0,.08));border:1px solid rgba(255,149,0,.4);border-radius:22px;text-align:center">
+      <div style="font-size:12px;color:#ff9500;letter-spacing:3px;font-weight:800">YOUR EVENT CODE</div>
+      <div id="event-code-display" style="font-size:60px;font-weight:900;letter-spacing:12px;margin:8px 0;background:linear-gradient(135deg,#ff9500,#ff4000);-webkit-background-clip:text;background-clip:text;color:transparent">----</div>
       <div id="event-name-display" style="font-size:18px;font-weight:700;color:#fff"></div>
-      <p style="margin-top:10px;font-size:13px;color:#b8c0d0">Tell everyone to open Honkestra → Friend code → type these 4 letters.</p>
+      <p style="margin-top:10px;font-size:13px;color:rgba(255,255,255,.5)">tell everyone: open honkestra → friend code → enter these 4 letters</p>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="btn small" onclick="shareEventCode()">📲 Share</button>
-        <button class="btn small ghost" onclick="useEventCode()">Use this room</button>
+        <button class="btn small" onclick="shareEventCode()">📲 share</button>
+        <button class="btn small ghost" onclick="useEventCode()">use this room</button>
       </div>
-      <div style="margin-top:14px;font-size:13px;color:#8d96aa">Guests joined: <span id="event-joined">0</span></div>
+      <div style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.4)">guests joined: <span id="event-joined">0</span></div>
     </div>
   </div>
 
   <!-- Record real horn -->
   <div class="screen" id="screen-record">
-    <button class="back" onclick="go('home')">← Back</button>
-    <h2 style="margin-top:8px">🎤 Record your real horn</h2>
-    <p style="margin-bottom:16px">Roll down your window, hold the phone outside, and honk for 1 second. We'll use your actual horn instead of synthesized sound.</p>
+    <button class="back" onclick="go('home')">← back</button>
+    <h2 style="margin-top:8px">🎤 record your real horn</h2>
+    <p style="margin-bottom:16px">roll down your window, hold the phone outside, honk once. we use your actual horn sound.</p>
 
     <div class="play-area" style="gap:14px">
       <div style="font-size:80px" id="rec-emoji">🎤</div>
-      <div id="rec-status" style="font-size:18px;text-align:center;color:#b8c0d0;min-height:48px">Tap "Start" then honk once.</div>
+      <div id="rec-status" style="font-size:17px;text-align:center;color:rgba(255,255,255,.55);min-height:48px">tap start then honk once</div>
 
       <div class="stack" style="width:100%">
-        <button class="btn" id="rec-start" onclick="startRecording()">🔴 Start recording</button>
-        <button class="btn ghost" id="rec-preview" onclick="previewRecording()" style="display:none">▶️ Preview</button>
-        <button class="btn" id="rec-save" onclick="saveRecording()" style="display:none">💾 Use this horn</button>
-        <button class="btn ghost" id="rec-clear" onclick="clearRecording()" style="display:none">🗑️ Clear saved horn</button>
+        <button class="btn" id="rec-start" onclick="startRecording()">🔴 start recording</button>
+        <button class="btn ghost" id="rec-preview" onclick="previewRecording()" style="display:none">▶️ preview</button>
+        <button class="btn" id="rec-save" onclick="saveRecording()" style="display:none">💾 use this horn</button>
+        <button class="btn ghost" id="rec-clear" onclick="clearRecording()" style="display:none">🗑️ clear saved horn</button>
       </div>
 
-      <p class="legal">Recording happens on-device only. Nothing is uploaded.</p>
+      <p class="legal">recording stays on your device. nothing is uploaded.</p>
     </div>
   </div>
 
   <!-- End -->
-  <div class="screen" id="screen-end">
+  <div class="screen" id="screen-end" style="background:radial-gradient(ellipse at 50% 30%,rgba(255,80,0,.15),transparent 60%)">
     <div class="play-area">
-      <div style="font-size:72px">🎉</div>
-      <h1 style="text-align:center">Nice jam!</h1>
-      <p style="text-align:center">You hit <span id="end-hits">0</span> of <span id="end-total">0</span> cues.</p>
+      <div style="font-size:80px;animation:honkBob 1.5s ease-in-out infinite">🎺</div>
+      <h1 style="text-align:center;font-size:clamp(28px,8vw,40px)"><span class="grad">that slapped.</span></h1>
+      <p style="text-align:center">you hit <strong style="color:#ff9500"><span id="end-hits">0</span></strong> of <span id="end-total">0</span> honks</p>
       <div id="battle-result" style="text-align:center"></div>
       <div class="stat-row" style="width:100%">
         <div class="stat"><div class="stat-num" id="stat-jams">0</div><div class="stat-lbl">JAMS</div></div>
@@ -459,7 +546,7 @@
         <div class="stat"><div class="stat-num" id="stat-songs">0</div><div class="stat-lbl">SONGS</div></div>
       </div>
       <div class="stack" style="width:100%">
-        <button class="btn" onclick="go('home')">Back to map</button>
+        <button class="btn" onclick="go('home')">back to map</button>
       </div>
     </div>
   </div>
@@ -475,6 +562,34 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
+// =================================================================
+// HONKS PER CAR — configurable, default 10
+// =================================================================
+let HONKS_PER_CAR = Math.max(5, Math.min(25, parseInt(localStorage.getItem('hj_hpc') || '10', 10)));
+
+function setHonksPerCar(n) {
+  HONKS_PER_CAR = Math.max(5, Math.min(25, n));
+  localStorage.setItem('hj_hpc', HONKS_PER_CAR);
+  const el = document.getElementById('honks-per-car-num');
+  if (el) el.textContent = HONKS_PER_CAR;
+  renderSongs();
+}
+
+// Loop the song's note pattern until every car gets HONKS_PER_CAR honks.
+// Returns EXACTLY HONKS_PER_CAR * numCars notes.
+function extendSongNotes(baseNotes, numCars) {
+  const target = HONKS_PER_CAR * Math.max(1, numCars);
+  if (baseNotes.length >= target) return baseNotes.slice(0, target);
+  const span = Math.max(...baseNotes.map(n => n[0])) + 2;
+  let all = baseNotes.slice();
+  let rep = 1;
+  while (all.length < target && rep <= 40) {
+    all = all.concat(baseNotes.map(([b, s]) => [+(b + span * rep).toFixed(3), s]));
+    rep++;
+  }
+  return all.slice(0, target); // exact count
+}
+
 // =================================================================
 // CONFIG
 // =================================================================
@@ -1057,6 +1172,8 @@ function onHome() {
   renderHonkerList();
   renderVibeChips();
   updateOnlineCount();
+  const hpcEl = document.getElementById('honks-per-car-num');
+  if (hpcEl) hpcEl.textContent = HONKS_PER_CAR;
   // Show how many songs work with this car (after my rebalance fix, all of them do)
   const hint = document.getElementById('song-count-hint');
   if (hint) hint.textContent = `🎵 ${SONGS.length} songs work with your ${state.car.make} ${state.car.model}`;
@@ -1350,22 +1467,41 @@ function setVibe(label) {
   broadcastMe();
 }
 
-// Live list of other drivers in your room — names + vibes + cars
+// Story circles — YOU + every driver in the room as Instagram-style rings
 function renderHonkerList() {
-  const el = document.getElementById('honker-list');
+  const el = document.getElementById('story-circles');
   if (!el) return;
-  const others = [...state.drivers.values()];
-  if (!others.length) {
-    el.innerHTML = `<div style="background:rgba(255,255,255,0.04);border-radius:14px;padding:14px;text-align:center;font-size:13px;color:#8d96aa">No other honkers here yet. Hit <strong>📣 Invite everyone nearby</strong> or share your code 🎺</div>`;
-    return;
+  const parts = [];
+
+  // YOU always first
+  const youVibe = state.vibe ? state.vibe.split(' ')[0] : '';
+  parts.push(`<div class="story-circle">
+    <div class="story-ring you-ring"><div class="story-inner">${state.car ? state.car.icon : '🚗'}</div></div>
+    <div class="story-label">${state.driverName || 'you'}</div>
+    <div class="story-vibe-text">${youVibe}</div>
+  </div>`);
+
+  [...state.drivers.values()].forEach(d => {
+    const nm = (d.name || d.car.model || 'honker').slice(0, 8);
+    const vibe = d.vibe ? d.vibe.split(' ')[0] : '';
+    const ringCls = d.inMood === false ? 'story-ring dim' : 'story-ring';
+    parts.push(`<div class="story-circle">
+      <div class="${ringCls}"><div class="story-inner">${d.car.icon}</div></div>
+      <div class="story-label">${nm}</div>
+      <div class="story-vibe-text">${vibe}</div>
+    </div>`);
+  });
+
+  if (parts.length === 1) {
+    // Only ourselves — show a subtle "invite" nudge after the YOU circle
+    parts.push(`<div class="story-circle" onclick="broadcastJamRequest()" style="opacity:.55">
+      <div class="story-ring" style="background:rgba(255,255,255,.18)"><div class="story-inner" style="font-size:22px">➕</div></div>
+      <div class="story-label">invite</div>
+      <div class="story-vibe-text"></div>
+    </div>`);
   }
-  el.innerHTML = `<div style="font-size:12px;color:#8d96aa;font-weight:700;margin:2px 0 8px">🚗 HONKERS IN YOUR ROOM (${others.length})</div>` +
-    others.map(d => {
-      const nm = d.name || (d.car.make ? d.car.make + ' ' + d.car.model : d.car.model);
-      const vibe = d.vibe ? `<span style="font-size:11px;color:#ffb800;font-weight:700">${d.vibe}</span>` : `<span style="font-size:11px;color:#6b7589">${d.car.model}</span>`;
-      const moodDot = d.inMood === false ? '⚪' : '🟢';
-      return `<div class="lobby-row"><span class="car-emoji">${d.car.icon}</span><span class="name">${nm}<br>${vibe}</span><span style="font-size:13px">${moodDot}</span></div>`;
-    }).join('');
+
+  el.innerHTML = parts.join('');
 }
 
 // Share / "Let's go horn!" — copies a join link with your friend code
@@ -1556,7 +1692,9 @@ function renderSongListInto(elId, isPractice) {
 // match, then rebalance so no car gets less than floor(total/numCars).
 function assignSongNotes(song, allCars) {
   const baseMidi = 60;
-  const notes = song.notes.map(([beat, semi]) => {
+  // Extend so every car gets exactly HONKS_PER_CAR honks
+  const rawNotes = extendSongNotes(song.notes, allCars.length);
+  const notes = rawNotes.map(([beat, semi]) => {
     const targetFreq = 440 * Math.pow(2, (baseMidi + semi - 69)/12);
     let bestIdx = 0, bestDist = Infinity;
     allCars.forEach((c, i) => {
@@ -1570,29 +1708,41 @@ function assignSongNotes(song, allCars) {
     });
     return { beat, semi, carIdx: bestIdx };
   });
-  // Rebalance
-  const target = Math.max(1, Math.floor(notes.length / allCars.length));
+  // Rebalance so every car gets exactly HONKS_PER_CAR
+  const target = HONKS_PER_CAR;
   const counts = new Array(allCars.length).fill(0);
   notes.forEach(n => counts[n.carIdx]++);
   for (let car = 0; car < allCars.length; car++) {
-    let safety = 200;
+    let safety = 400;
     while (counts[car] < target && safety-- > 0) {
       let maxCar = 0;
       for (let i = 0; i < counts.length; i++) if (counts[i] > counts[maxCar]) maxCar = i;
       if (counts[maxCar] <= target) break;
-      // pick a note from maxCar whose pitch is closest to "car"'s avg — least painful swap
       const carAvg = (allCars[car].freq[0] + allCars[car].freq[1]) / 2;
       let bestNoteIdx = -1, bestNoteDist = Infinity;
       notes.forEach((n, idx) => {
         if (n.carIdx !== maxCar) return;
-        const target2 = 440 * Math.pow(2, (baseMidi + n.semi - 69)/12);
+        const tgt = 440 * Math.pow(2, (baseMidi + n.semi - 69)/12);
         let d = Infinity;
-        for (let o = -2; o <= 2; o++) d = Math.min(d, Math.abs(carAvg - target2 * Math.pow(2, o)));
+        for (let o = -2; o <= 2; o++) d = Math.min(d, Math.abs(carAvg - tgt * Math.pow(2, o)));
         if (d < bestNoteDist) { bestNoteDist = d; bestNoteIdx = idx; }
       });
       if (bestNoteIdx < 0) break;
       notes[bestNoteIdx].carIdx = car;
       counts[maxCar]--; counts[car]++;
+    }
+  }
+  // Final trim: move excess from over-assigned cars to any still-under cars
+  counts.fill(0);
+  notes.forEach(n => counts[n.carIdx]++);
+  for (let car = 0; car < allCars.length; car++) {
+    let excess = counts[car] - target;
+    for (let idx = 0; idx < notes.length && excess > 0; idx++) {
+      if (notes[idx].carIdx !== car) continue;
+      const needy = counts.findIndex((c, i) => c < target);
+      if (needy === -1) break;
+      notes[idx].carIdx = needy;
+      counts[car]--; counts[needy]++; excess--;
     }
   }
   return notes;
@@ -2249,9 +2399,9 @@ function drawJamFrame() {
   }
 
   // Footer
-  ctx.fillStyle = '#6b7589';
-  ctx.font = '28px sans-serif';
-  ctx.fillText('cheskelsbreuer-bit.github.io/honkestra', W/2, H - 60);
+  ctx.fillStyle = 'rgba(255,149,0,0.7)';
+  ctx.font = 'bold 26px sans-serif';
+  ctx.fillText('honkestra.pages.dev', W/2, H - 60);
 }
 
 async function shareJamVideo() {

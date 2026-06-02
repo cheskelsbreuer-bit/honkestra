@@ -1,4 +1,4 @@
-const CACHE = 'honkestra-v4-multiplayer';
+const CACHE = 'honkestra-v5-genz';
 const FILES = ['./', './index.html', './app.html', './manifest.json'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES).catch(()=>{})));
