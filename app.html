@@ -3,18 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0a0e1a">
+<meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Honkestra">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Sync with cars near you and play real songs with your horns. Free, no download, any phone.">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23ff7a00'/%3E%3Ctext y='75' x='50' font-size='62' text-anchor='middle'%3E%F0%9F%8E%BA%3C/text%3E%3C/svg%3E">
-<title>Honkestra — Play music with cars in traffic</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23000'/%3E%3Ctext y='72' x='50' font-size='58' text-anchor='middle'%3E%F0%9F%8E%BA%3C/text%3E%3C/svg%3E">
+<title>Honkestra — your car has a voice.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;background:#000;color:#fff;user-select:none}
+  html,body{height:100%;overflow:hidden;font-family:"Bricolage Grotesque",-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;background:#000;color:#fff;user-select:none}
   body{display:flex;flex-direction:column}
   .app{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden}
   .screen{position:absolute;inset:0;display:none;flex-direction:column;padding:20px;overflow-y:auto}
@@ -200,19 +204,38 @@
 
   <!-- Splash / Welcome -->
   <div class="screen active" id="screen-welcome" style="padding:24px 20px">
-    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 20%,rgba(255,90,0,.2),transparent 65%);pointer-events:none"></div>
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 25%,rgba(255,90,0,.18),transparent 65%);pointer-events:none"></div>
     <div style="position:relative;z-index:1;display:flex;flex-direction:column;height:100%">
-      <div style="font-size:11px;font-weight:800;letter-spacing:4px;color:rgba(255,255,255,.28);text-align:center;margin-bottom:8px">HONKESTRA</div>
-      <div style="text-align:center;margin:10px 0 0">
-        <div style="font-size:88px;line-height:1;display:inline-block;animation:honkBob 2s ease-in-out infinite">🎺</div>
+
+      <!-- Brand mark -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:4px">
+        <svg viewBox="0 0 36 28" width="32" height="25" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="hg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff9500"/><stop offset="100%" stop-color="#ff3d00"/></linearGradient></defs>
+          <!-- Horn body -->
+          <path d="M2 18 L10 14.5 L10 13.5 L2 10 Z" fill="url(#hg1)"/>
+          <path d="M10 8 L10 20 L28 24 L28 4 Z" fill="url(#hg1)"/>
+          <!-- Bell -->
+          <ellipse cx="30" cy="14" rx="3.5" ry="7" fill="url(#hg1)" opacity=".85"/>
+          <!-- Valves -->
+          <rect x="14" y="5" width="3" height="7" rx="1.5" fill="rgba(255,255,255,.35)"/>
+          <rect x="19" y="5" width="3" height="7" rx="1.5" fill="rgba(255,255,255,.35)"/>
+          <rect x="24" y="5" width="3" height="7" rx="1.5" fill="rgba(255,255,255,.35)"/>
+        </svg>
+        <span style="font-size:17px;font-weight:800;letter-spacing:3px;color:rgba(255,255,255,.85)">HONKESTRA</span>
       </div>
-      <h1 style="font-size:clamp(32px,9vw,46px);font-weight:900;text-align:center;line-height:1.06;letter-spacing:-1.5px;margin:18px 0 10px">traffic?<br><span class="grad">make it a concert.</span></h1>
-      <p style="text-align:center;font-size:15px;color:rgba(255,255,255,.45);padding:0 12px;line-height:1.6">every car has a horn. together you play real songs.<br>no cap this actually slaps.</p>
-      <div style="flex:1;min-height:16px"></div>
-      <input id="driver-name-input" placeholder="what do they call you? (optional)" maxlength="14" style="width:100%;font-size:16px;padding:14px 18px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:999px;color:#fff;margin-bottom:12px;text-align:center;outline:none">
+      <div style="text-align:center;font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(255,149,0,.7);margin-bottom:20px">CAR MUSIC, FR FR</div>
+
+      <!-- Hero -->
+      <div style="text-align:center;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:10px 0">
+        <div style="font-size:80px;line-height:1;animation:honkBob 2s ease-in-out infinite">🎺</div>
+        <h1 style="font-size:clamp(30px,9vw,44px);font-weight:900;text-align:center;line-height:1.05;letter-spacing:-1.5px">your car<br><span class="grad">has a voice.</span></h1>
+        <p style="text-align:center;font-size:15px;color:rgba(255,255,255,.42);padding:0 8px;line-height:1.6;max-width:300px">sync with nearby drivers. pick a song. honk it together. no cap this actually slaps.</p>
+      </div>
+
+      <input id="driver-name-input" placeholder="what do they call you? (optional)" maxlength="14" style="width:100%;font-size:16px;padding:14px 18px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:999px;color:#fff;margin-bottom:12px;text-align:center;outline:none;font-family:inherit">
       <div class="stack">
         <button class="btn" style="font-size:19px;padding:18px;letter-spacing:.5px" onclick="saveDriverName(); go('perms')">pull up 🎺</button>
-        <p class="legal">honk only when it's safe + legal. app locks while you're moving.</p>
+        <p class="legal">honk only when safe + legal. app locks while moving.</p>
       </div>
     </div>
   </div>
@@ -269,9 +292,17 @@
   <!-- Home / map -->
   <div class="screen" id="screen-home">
     <div class="top-bar">
-      <div>
-        <div class="brand" style="margin-bottom:1px">HONKESTRA</div>
-        <div class="status-row"><span class="status-dot" id="status-dot"></span><span id="status-text">looking for drivers…</span></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg viewBox="0 0 36 28" width="24" height="19" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="hg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff9500"/><stop offset="100%" stop-color="#ff3d00"/></linearGradient></defs>
+          <path d="M2 18 L10 14.5 L10 13.5 L2 10 Z" fill="url(#hg2)"/>
+          <path d="M10 8 L10 20 L28 24 L28 4 Z" fill="url(#hg2)"/>
+          <ellipse cx="30" cy="14" rx="3.5" ry="7" fill="url(#hg2)" opacity=".85"/>
+        </svg>
+        <div>
+          <div class="brand" style="margin-bottom:1px">HONKESTRA</div>
+          <div class="status-row"><span class="status-dot" id="status-dot"></span><span id="status-text">looking for drivers…</span></div>
+        </div>
       </div>
       <button class="btn ghost small" onclick="go('car-make')">🚗 <span id="my-car-name">car</span></button>
     </div>
