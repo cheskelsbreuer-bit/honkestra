@@ -3,216 +3,364 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0a0e1a">
-<meta name="description" content="Honkestra — play music with cars in traffic. Sync with drivers near you, pick a song, honk together.">
-<meta property="og:title" content="Honkestra — make music with car horns">
-<meta property="og:description" content="Stuck in traffic? Stuck at a wedding convoy or stadium tailgate? Sync with the cars near you and honk a song together.">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Honkestra — play real songs with your car horn. Sync with drivers around you and make music in traffic.">
+<meta property="og:title" content="Honkestra — your car has a voice.">
+<meta property="og:description" content="Sync with cars near you and play real songs with your horns. Free, no download, works on any phone.">
+<meta property="og:image" content="https://honkestra.pages.dev/og.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Honkestra">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23ff7a00'/%3E%3Ctext y='75' x='50' font-size='62' text-anchor='middle'%3E%F0%9F%8E%BA%3C/text%3E%3C/svg%3E">
-<title>Honkestra — Make music with car horns</title>
+<title>Honkestra — your car has a voice.</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { background: #0a0e1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; min-height: 100%; overflow-x: hidden; }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-  .bg-glow { position: absolute; pointer-events: none; width: 800px; height: 800px; border-radius: 50%; background: radial-gradient(circle, rgba(255,184,0,0.18), transparent 70%); top: -250px; left: 50%; transform: translateX(-50%); z-index: 0; }
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;overflow-x:hidden}
 
-  /* Nav */
-  nav { position: relative; padding: 22px 0; display: flex; justify-content: space-between; align-items: center; z-index: 2; }
-  .logo { font-weight: 900; letter-spacing: 2px; font-size: 18px; }
-  .logo .emoji { font-size: 24px; vertical-align: middle; }
-  nav a.cta { background: linear-gradient(135deg, #ffb800, #ff7a00); color: #1a1a1a; padding: 10px 22px; border-radius: 12px; font-weight: 800; text-decoration: none; font-size: 14px; box-shadow: 0 6px 20px rgba(255,122,0,0.3); }
+/* ── HERO ── */
+.hero{
+  min-height:100svh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;padding:24px 20px 40px;
+  position:relative;overflow:hidden;
+}
+.hero-bg{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255,90,0,.18), transparent 70%);
+  pointer-events:none;
+}
 
-  /* Hero */
-  .hero { position: relative; padding: 60px 0 80px; text-align: center; z-index: 2; }
-  .badge { display: inline-block; background: rgba(255,184,0,0.12); color: #ffb800; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; margin-bottom: 24px; }
-  h1 { font-size: clamp(40px, 8vw, 84px); line-height: 1.05; letter-spacing: -2px; font-weight: 900; margin-bottom: 18px; }
-  h1 .accent { background: linear-gradient(135deg, #ffb800, #ff7a00); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .lead { font-size: clamp(16px, 2vw, 20px); color: #b8c0d0; max-width: 620px; margin: 0 auto 36px; }
-  .open-btn { display: inline-block; background: linear-gradient(135deg, #ffb800, #ff7a00); color: #1a1a1a; padding: 22px 48px; border-radius: 18px; font-weight: 900; font-size: 22px; text-decoration: none; box-shadow: 0 16px 40px rgba(255,122,0,0.35); transition: transform .15s; letter-spacing: 0.5px; }
-  .open-btn:hover { transform: translateY(-2px); }
-  .open-btn:active { transform: translateY(0); }
-  .sub-cta { display: block; margin-top: 14px; color: #8d96aa; font-size: 13px; }
+/* jam stage */
+.stage{
+  position:relative;width:100%;max-width:480px;height:220px;margin:0 auto 40px;
+}
+.car{
+  position:absolute;bottom:0;font-size:clamp(46px,9vw,72px);
+  animation:carBob 2s ease-in-out infinite;
+  transition:filter .1s;
+  cursor:default;user-select:none;
+}
+.car:nth-child(1){left:2%; animation-delay:0s}
+.car:nth-child(2){left:22%;animation-delay:.38s}
+.car:nth-child(3){left:44%;animation-delay:.72s}
+.car:nth-child(4){left:66%;animation-delay:1.1s}
+.car:nth-child(5){right:2%;animation-delay:1.5s}
+@keyframes carBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
 
-  .hero-visual { position: relative; margin: 40px auto 0; max-width: 700px; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; gap: 24px; }
-  .hero-car { font-size: clamp(50px, 8vw, 90px); animation: bob 3s ease-in-out infinite; }
-  .hero-car:nth-child(2) { animation-delay: 0.4s; }
-  .hero-car:nth-child(3) { animation-delay: 0.8s; }
-  .hero-car:nth-child(4) { animation-delay: 1.2s; }
-  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
-  .note { position: absolute; font-size: 28px; opacity: 0; animation: float 3s ease-in-out infinite; }
-  .note:nth-child(5) { top: 10%; left: 20%; animation-delay: 0s; }
-  .note:nth-child(6) { top: 5%; left: 60%; animation-delay: 1s; }
-  .note:nth-child(7) { top: 30%; right: 15%; animation-delay: 2s; }
-  @keyframes float { 0% { opacity: 0; transform: translateY(20px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-60px); } }
+/* horn ripple rings around a honking car */
+.ring{
+  position:absolute;border-radius:50%;
+  border:2px solid rgba(255,149,0,.7);
+  animation:ringOut 1.1s ease-out forwards;
+  pointer-events:none;
+}
+@keyframes ringOut{
+  0%  {transform:translate(-50%,-50%) scale(.3);opacity:.9}
+  100%{transform:translate(-50%,-50%) scale(2.8);opacity:0}
+}
 
-  /* Sections */
-  section { position: relative; padding: 80px 0; z-index: 2; }
-  h2 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; margin-bottom: 16px; letter-spacing: -0.5px; }
-  .section-lead { font-size: 17px; color: #b8c0d0; max-width: 600px; margin-bottom: 48px; }
+/* floating notes */
+.note{
+  position:absolute;font-size:clamp(18px,3vw,28px);
+  animation:noteFloat 3s ease-out forwards;
+  pointer-events:none;
+}
+@keyframes noteFloat{
+  0%  {opacity:0;transform:translateY(0)  rotate(0deg)}
+  20% {opacity:1}
+  100%{opacity:0;transform:translateY(-110px) rotate(18deg)}
+}
 
-  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
-  .feature { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 28px; border-radius: 20px; }
-  .feature .icon { font-size: 40px; margin-bottom: 14px; }
-  .feature h3 { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
-  .feature p { color: #8d96aa; font-size: 14px; line-height: 1.6; }
+/* ── HEADLINE ── */
+.eyebrow{
+  font-size:11px;font-weight:800;letter-spacing:4px;
+  color:rgba(255,255,255,.32);text-transform:uppercase;
+  margin-bottom:14px;
+}
+h1{
+  font-size:clamp(38px,10vw,80px);line-height:1.02;
+  font-weight:900;letter-spacing:-2px;
+  margin-bottom:18px;
+}
+h1 .g{
+  background:linear-gradient(135deg,#ff9500,#ff3d00);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.sub{
+  font-size:clamp(16px,2.5vw,20px);color:rgba(255,255,255,.5);
+  max-width:520px;line-height:1.55;margin:0 auto 36px;
+}
 
-  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
-  .step { background: linear-gradient(135deg, rgba(255,184,0,0.06), rgba(255,122,0,0.02)); border: 1px solid rgba(255,184,0,0.15); padding: 24px; border-radius: 18px; position: relative; }
-  .step-num { position: absolute; top: 16px; right: 18px; font-size: 56px; font-weight: 900; opacity: 0.18; color: #ffb800; line-height: 1; }
-  .step h4 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
-  .step p { color: #b8c0d0; font-size: 13px; }
+/* ── CTA ── */
+.cta-wrap{display:flex;flex-direction:column;align-items:center;gap:12px}
+.cta{
+  display:inline-block;
+  background:linear-gradient(135deg,#ff9500,#ff3d00);
+  color:#000;padding:20px 56px;border-radius:999px;
+  font-weight:900;font-size:clamp(18px,3vw,22px);
+  text-decoration:none;letter-spacing:.3px;
+  box-shadow:0 8px 40px rgba(255,80,0,.5),0 0 0 0 rgba(255,80,0,.3);
+  transition:transform .15s,box-shadow .15s;
+  animation:ctaPulse 2.5s ease-in-out infinite;
+}
+.cta:hover{transform:translateY(-3px);box-shadow:0 14px 50px rgba(255,80,0,.6)}
+.cta:active{transform:scale(.97)}
+@keyframes ctaPulse{
+  0%,100%{box-shadow:0 8px 40px rgba(255,80,0,.5),0 0 0  0px rgba(255,80,0,.25)}
+  50%    {box-shadow:0 8px 40px rgba(255,80,0,.5),0 0 0 14px rgba(255,80,0,0)}
+}
+.cta-note{font-size:13px;color:rgba(255,255,255,.3);font-weight:500}
 
-  /* Use cases */
-  .uses { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 20px; }
-  .use { background: rgba(255,255,255,0.04); border-radius: 14px; padding: 18px; text-align: center; }
-  .use .e { font-size: 36px; }
-  .use .t { font-weight: 700; font-size: 14px; margin-top: 6px; }
-  .use .d { color: #8d96aa; font-size: 12px; margin-top: 2px; }
+/* ── PROOF STRIP ── */
+.strip{
+  display:flex;justify-content:center;gap:clamp(24px,6vw,60px);
+  padding:28px 20px;
+  border-top:1px solid rgba(255,255,255,.06);
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.strip-item{text-align:center}
+.strip-num{
+  font-size:clamp(24px,4vw,32px);font-weight:900;
+  background:linear-gradient(135deg,#ff9500,#ff3d00);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  display:block;
+}
+.strip-lbl{font-size:12px;color:rgba(255,255,255,.35);font-weight:600;letter-spacing:1px;margin-top:3px}
 
-  /* Install */
-  .install { background: linear-gradient(135deg, rgba(255,184,0,0.08), rgba(255,122,0,0.02)); border: 1px solid rgba(255,184,0,0.18); border-radius: 24px; padding: 36px; margin-top: 40px; }
-  .install h3 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
-  .install p { color: #b8c0d0; font-size: 14px; margin-bottom: 16px; }
-  .install ol { list-style: none; counter-reset: step; }
-  .install ol li { counter-increment: step; padding: 10px 0 10px 40px; position: relative; font-size: 14px; color: #b8c0d0; border-bottom: 1px solid rgba(255,255,255,0.04); }
-  .install ol li:last-child { border-bottom: none; }
-  .install ol li::before { content: counter(step); position: absolute; left: 0; top: 8px; width: 28px; height: 28px; background: linear-gradient(135deg, #ffb800, #ff7a00); color: #1a1a1a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+/* ── MOMENT CARDS ── */
+.moments{
+  padding:64px 20px;max-width:1100px;margin:0 auto;
+}
+.moments-title{
+  font-size:clamp(24px,4vw,36px);font-weight:900;
+  text-align:center;letter-spacing:-.5px;margin-bottom:8px;
+}
+.moments-sub{text-align:center;color:rgba(255,255,255,.4);font-size:15px;margin-bottom:36px}
+.cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:16px;
+}
+.card{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:24px;padding:28px 24px;
+  transition:transform .2s,border-color .2s;
+}
+.card:hover{transform:translateY(-4px);border-color:rgba(255,149,0,.3)}
+.card-icon{font-size:42px;margin-bottom:14px}
+.card-title{font-size:18px;font-weight:800;margin-bottom:8px}
+.card-body{font-size:14px;color:rgba(255,255,255,.45);line-height:1.6}
 
-  /* Big CTA */
-  .big-cta { background: linear-gradient(135deg, #ffb800 0%, #ff7a00 100%); border-radius: 28px; padding: 60px 36px; text-align: center; margin-bottom: 60px; }
-  .big-cta h2 { color: #1a1a1a; font-size: clamp(28px, 4vw, 42px); margin-bottom: 12px; }
-  .big-cta p { color: #1a1a1a; opacity: 0.75; max-width: 500px; margin: 0 auto 28px; font-size: 16px; }
-  .big-cta .open-btn { background: #1a1a1a; color: #ffb800; box-shadow: 0 14px 30px rgba(0,0,0,0.3); }
+/* ── HOW IT WORKS ── */
+.how{
+  padding:64px 20px;max-width:900px;margin:0 auto;
+  text-align:center;
+}
+.how h2{font-size:clamp(22px,4vw,34px);font-weight:900;margin-bottom:32px;letter-spacing:-.5px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.step{
+  background:rgba(255,149,0,.07);
+  border:1px solid rgba(255,149,0,.15);
+  border-radius:20px;padding:22px 18px;
+  position:relative;text-align:left;
+}
+.step-n{
+  font-size:48px;font-weight:900;opacity:.14;
+  position:absolute;top:10px;right:14px;line-height:1;
+  background:linear-gradient(135deg,#ff9500,#ff3d00);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.step h4{font-size:15px;font-weight:800;margin-bottom:6px}
+.step p{font-size:13px;color:rgba(255,255,255,.45);line-height:1.55}
 
-  footer { padding: 30px 0 60px; text-align: center; color: #5a627a; font-size: 13px; }
-  footer a { color: #8d96aa; text-decoration: none; }
-  footer a:hover { color: #ffb800; }
+/* ── BOTTOM CTA ── */
+.bottom{
+  padding:80px 20px;text-align:center;
+  background:radial-gradient(ellipse 70% 50% at 50% 100%,rgba(255,80,0,.14),transparent 70%);
+}
+.bottom h2{font-size:clamp(28px,5vw,52px);font-weight:900;letter-spacing:-1px;margin-bottom:14px}
+.bottom p{color:rgba(255,255,255,.4);font-size:16px;margin-bottom:32px}
 
-  @media (max-width: 600px) {
-    section { padding: 50px 0; }
-    .hero { padding: 30px 0 50px; }
-    .hero-visual { gap: 14px; margin-top: 20px; }
-    .open-btn { padding: 18px 32px; font-size: 18px; }
-  }
+/* ── FOOTER ── */
+footer{
+  padding:24px 20px;text-align:center;
+  color:rgba(255,255,255,.22);font-size:13px;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+footer a{color:rgba(255,149,0,.6);text-decoration:none}
+footer a:hover{color:#ff9500}
 </style>
 </head>
 <body>
-<div class="bg-glow"></div>
-<div class="wrap">
 
-  <nav>
-    <div class="logo"><span class="emoji">🎺</span> HONKESTRA</div>
-    <a href="app.html" class="cta">Open app</a>
-  </nav>
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <div class="hero-bg"></div>
 
-  <header class="hero">
-    <div class="badge">🚗  MAKE MUSIC WITH HORNS  🎺</div>
-    <h1>Stuck in traffic?<br><span class="accent">Make music.</span></h1>
-    <p class="lead">Honkestra is the world's first car-horn band. Sync with drivers around you, pick a song, and your real car horns play the melody together.</p>
-    <a href="app.html" class="open-btn">🎺 Open Honkestra →</a>
-    <span class="sub-cta">Free · No download · Works on any phone</span>
+  <div class="eyebrow">honkestra</div>
 
-    <div class="hero-visual">
-      <span class="hero-car">🚗</span>
-      <span class="hero-car">🚙</span>
-      <span class="hero-car">🛻</span>
-      <span class="hero-car">🏎️</span>
-      <span class="note">🎵</span>
-      <span class="note">🎶</span>
-      <span class="note">♫</span>
-    </div>
-  </header>
+  <!-- Animated jam stage -->
+  <div class="stage" id="stage">
+    <div class="car" id="c0">🚗</div>
+    <div class="car" id="c1">🚙</div>
+    <div class="car" id="c2">🛻</div>
+    <div class="car" id="c3">🏎️</div>
+    <div class="car" id="c4">🚐</div>
+  </div>
 
-  <section>
-    <h2>What is Honkestra?</h2>
-    <p class="section-lead">A web app that turns nearby cars into a horn orchestra. Each car contributes its own pitch — together, you play real songs on real streets.</p>
+  <h1>your car<br>has a <span class="g">voice.</span></h1>
+  <p class="sub">sync with drivers near you. pick a song.<br>your real car horns play it together.</p>
 
-    <div class="features">
-      <div class="feature">
-        <div class="icon">📍</div>
-        <h3>Finds drivers near you</h3>
-        <p>Uses GPS to discover other Honkestra users within a few hundred metres — or use a 4-letter friend code for private events.</p>
-      </div>
-      <div class="feature">
-        <div class="icon">🎵</div>
-        <h3>50+ songs, growing</h3>
-        <p>Happy Birthday, Imperial March, We Will Rock You, Mexican Hat Dance, Auld Lang Syne, and more. Or create your own with the rhythm maker.</p>
-      </div>
-      <div class="feature">
-        <div class="icon">🛣️</div>
-        <h3>Two modes</h3>
-        <p><strong>Game mode</strong> — practice on your phone alone. <strong>Real World mode</strong> — phone stays silent and just tells you when to honk your actual car horn.</p>
-      </div>
-      <div class="feature">
-        <div class="icon">📹</div>
-        <h3>Records as TikTok video</h3>
-        <p>Capture the moment on camera. The app auto-records and gives you a vertical clip ready to share.</p>
-      </div>
-      <div class="feature">
-        <div class="icon">🥊</div>
-        <h3>Honk Battles</h3>
-        <p>Split the convoy into Red vs Blue teams. Whoever hits more cues wins. Great for parties and tailgates.</p>
-      </div>
-      <div class="feature">
-        <div class="icon">🚗</div>
-        <h3>80+ cars to pick from</h3>
-        <p>Every car has its real-world horn pitch — Mercedes deep, Ferrari bright, Mack truck rumble. Record your own real horn too.</p>
-      </div>
-    </div>
-  </section>
+  <div class="cta-wrap">
+    <a href="app.html" class="cta">pull up 🎺</a>
+    <span class="cta-note">free · no download · any phone</span>
+  </div>
+</section>
 
-  <section>
-    <h2>How it works</h2>
-    <p class="section-lead">Four taps, you're jamming.</p>
-    <div class="steps">
-      <div class="step"><div class="step-num">1</div><h4>Pick your car</h4><p>Browse 80+ makes &amp; models — each has its real factory horn pitch.</p></div>
-      <div class="step"><div class="step-num">2</div><h4>Find a room</h4><p>Auto-discover drivers nearby, or share a 4-letter code with your group.</p></div>
-      <div class="step"><div class="step-num">3</div><h4>Pick a song</h4><p>Everyone in the room hits Ready — host starts a 6-second countdown.</p></div>
-      <div class="step"><div class="step-num">4</div><h4>Honk on cue</h4><p>Phone shows when, your horn makes the sound. Together you make music.</p></div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Built for</h2>
-    <p class="section-lead">Honkestra shines anywhere horns are already part of the moment.</p>
-    <div class="uses">
-      <div class="use"><div class="e">💒</div><div class="t">Wedding convoys</div><div class="d">A coordinated melody at the church</div></div>
-      <div class="use"><div class="e">🏟️</div><div class="t">Stadium tailgates</div><div class="d">Team chants from the parking lot</div></div>
-      <div class="use"><div class="e">🎓</div><div class="t">Drive-thru graduations</div><div class="d">"Pomp & Circumstance" by horn</div></div>
-      <div class="use"><div class="e">🎉</div><div class="t">Parades</div><div class="d">Float music without a band</div></div>
-      <div class="use"><div class="e">🎂</div><div class="t">Birthday surprises</div><div class="d">10 cars honk Happy Birthday</div></div>
-      <div class="use"><div class="e">🚦</div><div class="t">Traffic jams</div><div class="d">When you're stopped + in the mood</div></div>
-    </div>
-  </section>
-
-  <section>
-    <div class="install">
-      <h3>📱 Install on your phone</h3>
-      <p>Open Honkestra once, then add it to your home screen so it launches like a real app.</p>
-      <ol>
-        <li><strong>iPhone:</strong> Open in Safari → tap Share → "Add to Home Screen"</li>
-        <li><strong>Android:</strong> Open in Chrome → tap ⋮ → "Add to Home Screen"</li>
-        <li>The app icon appears next to your other apps. Tap to launch fullscreen.</li>
-      </ol>
-    </div>
-  </section>
-
-  <section>
-    <div class="big-cta">
-      <h2>Try it now 🎺</h2>
-      <p>Free forever. Works on any phone. No download needed.</p>
-      <a href="app.html" class="open-btn">Open Honkestra →</a>
-    </div>
-  </section>
-
-  <footer>
-    Built with 🎺 by Chaya · <a href="https://github.com/cheskelsbreuer-bit/honkestra" target="_blank">Open source on GitHub</a>
-    <br><br>
-    <span style="font-size:11px">Honk only when it's safe and legal where you are. Honkestra disables itself when your phone is moving.</span>
-  </footer>
-
+<!-- ═══ STRIP ═══ -->
+<div class="strip">
+  <div class="strip-item"><span class="strip-num">71+</span><div class="strip-lbl">SONGS</div></div>
+  <div class="strip-item"><span class="strip-num">80+</span><div class="strip-lbl">CAR TYPES</div></div>
+  <div class="strip-item"><span class="strip-num">$0</span><div class="strip-lbl">FOREVER FREE</div></div>
 </div>
+
+<!-- ═══ MOMENT CARDS ═══ -->
+<section class="moments">
+  <h2 class="moments-title">built for real moments</h2>
+  <p class="moments-sub">anywhere horns already belong</p>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">💒</div>
+      <div class="card-title">wedding convoy</div>
+      <div class="card-body">30 cars. one song. the couple cries happy tears. your cousin posts it and gets 400k views.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🏟️</div>
+      <div class="card-title">stadium tailgate</div>
+      <div class="card-body">parking lot full of fans. pick the team anthem. the whole section honks it together.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎓</div>
+      <div class="card-title">graduation drive-thru</div>
+      <div class="card-body">pomp &amp; circumstance — but make it horns. the video goes on the family group chat forever.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🚦</div>
+      <div class="card-title">random traffic jam</div>
+      <div class="card-body">you're stopped. bored. you open the app. a stranger three cars ahead accepts. magic happens.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎂</div>
+      <div class="card-title">birthday surprise</div>
+      <div class="card-body">10 cars show up outside their house. honk happy birthday in perfect sync. they lose it.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🥊</div>
+      <div class="card-title">honk battle</div>
+      <div class="card-body">red team vs blue team. highest honk-accuracy wins. trash talk encouraged.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HOW IT WORKS ═══ -->
+<section class="how">
+  <h2>four taps. then music.</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-n">1</div>
+      <h4>pick your car</h4>
+      <p>80+ makes — each has its real-world horn pitch. toyota camry sounds different from a mack truck.</p>
+    </div>
+    <div class="step">
+      <div class="step-n">2</div>
+      <h4>find a room</h4>
+      <p>auto-discover nearby drivers, or share a 4-letter code with your crew.</p>
+    </div>
+    <div class="step">
+      <div class="step-n">3</div>
+      <h4>pick a song</h4>
+      <p>everyone taps ready. host starts a 6-second countdown. all phones sync together.</p>
+    </div>
+    <div class="step">
+      <div class="step-n">4</div>
+      <h4>honk on cue</h4>
+      <p>your screen lights up when it's your turn. honk. together you make actual music.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ BOTTOM CTA ═══ -->
+<section class="bottom">
+  <h2>it's giving orchestra. 🎺</h2>
+  <p>free forever. no account. works on any phone.<br>open it, share the code, honk.</p>
+  <a href="app.html" class="cta">open honkestra →</a>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer>
+  <a href="https://github.com/cheskelsbreuer-bit/honkestra" target="_blank">open source on github</a>
+  &nbsp;·&nbsp;
+  honk only when it's safe + legal. app disables while you're moving.
+</footer>
+
+<script>
+// ── Animate the jam stage on the hero ──
+const stage   = document.getElementById('stage');
+const carEls  = Array.from(stage.querySelectorAll('.car'));
+const NOTES   = ['🎵','🎶','♪','♫'];
+
+// Pick a random car, fire a ripple + floating note
+function fireHonk() {
+  const idx  = Math.floor(Math.random() * carEls.length);
+  const car  = carEls[idx];
+  const rect = car.getBoundingClientRect();
+  const stRect = stage.getBoundingClientRect();
+
+  const cx = rect.left - stRect.left + rect.width / 2;
+  const cy = rect.top  - stRect.top  + rect.height / 2;
+
+  // Ripple rings (2 with slight delay)
+  [0, 180].forEach(delay => {
+    const r = document.createElement('div');
+    r.className = 'ring';
+    const size = 60 + Math.random() * 30;
+    Object.assign(r.style, {
+      width: size + 'px', height: size + 'px',
+      left: cx + 'px', top: cy + 'px',
+      animationDelay: delay + 'ms',
+      animationDuration: (900 + Math.random() * 300) + 'ms',
+    });
+    stage.appendChild(r);
+    setTimeout(() => r.remove(), 1400 + delay);
+  });
+
+  // Floating note
+  const n = document.createElement('div');
+  n.className = 'note';
+  n.textContent = NOTES[Math.floor(Math.random() * NOTES.length)];
+  Object.assign(n.style, {
+    left: (cx - 14 + (Math.random()-0.5)*40) + 'px',
+    bottom: (stRect.height - cy + 10) + 'px',
+    animationDuration: (2.2 + Math.random() * 1) + 's',
+  });
+  stage.appendChild(n);
+  setTimeout(() => n.remove(), 3500);
+
+  // Brief glow on the car
+  car.style.filter = 'drop-shadow(0 0 18px rgba(255,149,0,.9))';
+  setTimeout(() => { car.style.filter = ''; }, 250);
+}
+
+// Fire honks at musical-ish intervals
+const BEATS = [0, 480, 960, 1440, 1920, 2400, 2880];
+let t = 0;
+function loop() {
+  const delay = BEATS[Math.floor(Math.random() * BEATS.length)] + 200 + Math.random() * 200;
+  setTimeout(() => { fireHonk(); loop(); }, delay);
+}
+loop();
+</script>
 </body>
 </html>
